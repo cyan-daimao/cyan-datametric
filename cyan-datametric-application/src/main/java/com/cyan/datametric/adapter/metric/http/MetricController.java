@@ -13,7 +13,6 @@ import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
-import java.util.Optional;
 
 /**
  * 指标控制器
@@ -29,6 +28,126 @@ public class MetricController {
 
     public MetricController(MetricService metricService) {
         this.metricService = metricService;
+    }
+
+    // ==================== 测试数据初始化 ====================
+
+    @PostMapping("/init-data")
+    public Response<String> initData() {
+        String user = "system";
+        List<String> messages = new java.util.ArrayList<>();
+
+        // 辅助方法：获取或创建原子指标
+        java.util.function.Function<String, MetricBO> findByName = name -> {
+            MetricPageQuery query = new MetricPageQuery();
+            query.setMetricName(name);
+            query.setPageSize(1);
+            com.cyan.arch.common.api.Page<MetricBO> page = metricService.page(query, user);
+            if (page.getData() != null && !page.getData().isEmpty()) {
+                return page.getData().get(0);
+            }
+            return null;
+        };
+
+        // 1. 原子指标：订单总金额
+        MetricBO atomic1 = findByName.apply("订单总金额");
+        if (atomic1 == null) {
+            AtomicMetricCmd cmd = new AtomicMetricCmd();
+            cmd.setMetricName("订单总金额");
+            cmd.setBizCaliber("统计所有订单的金额总和");
+            cmd.setTechCaliber("SUM(order_amount) FROM cyan_ods.orders");
+            cmd.setStatFunc("SUM");
+            cmd.setDsName("mysql_prod");
+            cmd.setDbName("cyan_ods");
+            cmd.setTblName("orders");
+            cmd.setColName("order_amount");
+            cmd.setSubjectCode("ORDER");
+            cmd.setCreateBy(user);
+            cmd.setUpdateBy(user);
+            atomic1 = metricService.createAtomic(cmd);
+            messages.add("创建原子指标：订单总金额 (" + atomic1.getId() + ")");
+        } else {
+            messages.add("已存在原子指标：订单总金额 (" + atomic1.getId() + ")");
+        }
+
+        // 2. 原子指标：订单总笔数
+        MetricBO atomic2 = findByName.apply("订单总笔数");
+        if (atomic2 == null) {
+            AtomicMetricCmd cmd = new AtomicMetricCmd();
+            cmd.setMetricName("订单总笔数");
+            cmd.setBizCaliber("统计所有订单的笔数");
+            cmd.setTechCaliber("COUNT(order_id) FROM cyan_ods.orders");
+            cmd.setStatFunc("COUNT");
+            cmd.setDsName("mysql_prod");
+            cmd.setDbName("cyan_ods");
+            cmd.setTblName("orders");
+            cmd.setColName("order_id");
+            cmd.setSubjectCode("ORDER");
+            cmd.setCreateBy(user);
+            cmd.setUpdateBy(user);
+            atomic2 = metricService.createAtomic(cmd);
+            messages.add("创建原子指标：订单总笔数 (" + atomic2.getId() + ")");
+        } else {
+            messages.add("已存在原子指标：订单总笔数 (" + atomic2.getId() + ")");
+        }
+
+        // 3. 原子指标：活跃用户数
+        MetricBO atomic3 = findByName.apply("活跃用户数");
+        if (atomic3 == null) {
+            AtomicMetricCmd cmd = new AtomicMetricCmd();
+            cmd.setMetricName("活跃用户数");
+            cmd.setBizCaliber("统计去重后的活跃用户数");
+            cmd.setTechCaliber("COUNT_DISTINCT(user_id) FROM cyan_ods.user_login_log");
+            cmd.setStatFunc("COUNT_DISTINCT");
+            cmd.setDsName("mysql_prod");
+            cmd.setDbName("cyan_ods");
+            cmd.setTblName("user_login_log");
+            cmd.setColName("user_id");
+            cmd.setSubjectCode("USER");
+            cmd.setCreateBy(user);
+            cmd.setUpdateBy(user);
+            atomic3 = metricService.createAtomic(cmd);
+            messages.add("创建原子指标：活跃用户数 (" + atomic3.getId() + ")");
+        } else {
+            messages.add("已存在原子指标：活跃用户数 (" + atomic3.getId() + ")");
+        }
+
+        // 4. 派生指标：近7天订单金额（引用原子指标1）
+        MetricBO derived1 = findByName.apply("近7天订单金额");
+        if (derived1 == null) {
+            DerivedMetricCmd cmd = new DerivedMetricCmd();
+            cmd.setMetricName("近7天订单金额");
+            cmd.setBizCaliber("统计近7天内的订单总金额");
+            cmd.setTechCaliber("基于订单总金额原子指标，限定时间为近7天");
+            cmd.setAtomicMetricId(atomic1.getId());
+            cmd.setSubjectCode("ORDER");
+            cmd.setCreateBy(user);
+            cmd.setUpdateBy(user);
+            derived1 = metricService.createDerived(cmd);
+            messages.add("创建派生指标：近7天订单金额 (" + derived1.getId() + ")");
+        } else {
+            messages.add("已存在派生指标：近7天订单金额 (" + derived1.getId() + ")");
+        }
+
+        // 5. 复合指标：客单价（订单总金额 / 订单总笔数）
+        MetricBO composite1 = findByName.apply("客单价");
+        if (composite1 == null) {
+            CompositeMetricCmd cmd = new CompositeMetricCmd();
+            cmd.setMetricName("客单价");
+            cmd.setBizCaliber("平均每笔订单的金额");
+            cmd.setTechCaliber("订单总金额 / 订单总笔数");
+            cmd.setFormula("${" + atomic1.getId() + "} / ${" + atomic2.getId() + "}");
+            cmd.setMetricRefs(java.util.List.of(atomic1.getId(), atomic2.getId()));
+            cmd.setSubjectCode("ORDER");
+            cmd.setCreateBy(user);
+            cmd.setUpdateBy(user);
+            composite1 = metricService.createComposite(cmd);
+            messages.add("创建复合指标：客单价 (" + composite1.getId() + ")");
+        } else {
+            messages.add("已存在复合指标：客单价 (" + composite1.getId() + ")");
+        }
+
+        return Response.success(String.join("\n", messages));
     }
 
     // ==================== 指标定义 ====================

@@ -6,6 +6,7 @@ spring:
     name: cyan-datametric
   main:
     web-application-type: servlet
+    allow-bean-definition-overriding: true
 
 management:
   endpoints:

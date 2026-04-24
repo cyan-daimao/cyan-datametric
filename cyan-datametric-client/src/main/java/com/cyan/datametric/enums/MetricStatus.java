@@ -18,4 +18,13 @@ public enum MetricStatus {
 
     private final String code;
     private final String desc;
+
+    public static MetricStatus of(String code) {
+        for (MetricStatus value : values()) {
+            if (value.code.equals(code)) {
+                return value;
+            }
+        }
+        return null;
+    }
 }

@@ -18,4 +18,13 @@ public enum MetricType {
 
     private final String code;
     private final String desc;
+
+    public static MetricType of(String code) {
+        for (MetricType value : values()) {
+            if (value.code.equals(code)) {
+                return value;
+            }
+        }
+        return null;
+    }
 }

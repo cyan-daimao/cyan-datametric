@@ -2,11 +2,7 @@ package com.cyan.datametric.infra.persistence.metric.repository;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
-import com.cyan.arch.common.api.Pageable;
 import com.cyan.datametric.domain.metric.Metric;
-import com.cyan.datametric.domain.metric.MetricAtomicExt;
-import com.cyan.datametric.domain.metric.MetricCompositeExt;
-import com.cyan.datametric.domain.metric.MetricDerivedExt;
 import com.cyan.datametric.domain.metric.query.MetricPageQuery;
 import com.cyan.datametric.domain.metric.repository.MetricRepository;
 import com.cyan.datametric.enums.MetricStatus;
@@ -68,9 +64,9 @@ public class MetricRepositoryImpl implements MetricRepository {
         Page<MetricDefinitionDO> page = new Page<>(query.current(), query.size());
         LambdaQueryWrapper<MetricDefinitionDO> wrapper = new LambdaQueryWrapper<MetricDefinitionDO>()
                 .like(StringUtils.isNotBlank(query.getMetricName()), MetricDefinitionDO::getMetricName, query.getMetricName())
-                .eq(StringUtils.isNotBlank(query.getMetricType()), MetricDefinitionDO::getMetricType, MetricType.valueOf(query.getMetricType()))
+                .eq(StringUtils.isNotBlank(query.getMetricType()), MetricDefinitionDO::getMetricType, MetricType.of(query.getMetricType()))
                 .eq(StringUtils.isNotBlank(query.getSubjectCode()), MetricDefinitionDO::getSubjectCode, query.getSubjectCode())
-                .eq(StringUtils.isNotBlank(query.getStatus()), MetricDefinitionDO::getStatus, MetricStatus.valueOf(query.getStatus()))
+                .eq(StringUtils.isNotBlank(query.getStatus()), MetricDefinitionDO::getStatus, MetricStatus.of(query.getStatus()))
                 .orderByDesc(MetricDefinitionDO::getUpdatedAt);
         Page<MetricDefinitionDO> result = definitionMapper.selectPage(page, wrapper);
         List<Metric> list = Optional.ofNullable(result.getRecords()).orElse(List.of()).stream()
