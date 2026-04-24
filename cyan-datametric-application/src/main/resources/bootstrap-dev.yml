@@ -1,0 +1,24 @@
+spring:
+  config:
+    import:
+      - "nacos:arch-base.yaml?group=DEFAULT_GROUP&namespace=dev"
+      - "nacos:cyan-datametric.yaml?group=DEFAULT_GROUP&namespace=dev"
+  cloud:
+    nacos:
+      server-addr: 10.0.0.2:8848
+      username: nacos
+      password: nacos
+      config:
+        file-extension: yaml
+        namespace: dev
+      discovery:
+        ephemeral: true
+        namespace: dev
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    username: root
+    password: 123456
+    url: jdbc:mysql://10.0.0.2:3306/datametric
+
+server:
+  port: 8082
