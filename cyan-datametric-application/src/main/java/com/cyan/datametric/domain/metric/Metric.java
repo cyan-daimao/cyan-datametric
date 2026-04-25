@@ -138,11 +138,33 @@ public class Metric {
     public Metric update(MetricRepository repository) {
         validate();
         Assert.notBlank(this.id, new BusinessException("ID不能为空"));
-        if (this.status == MetricStatus.OFFLINE) {
-            throw new BusinessException("已下线的指标不可编辑");
-        }
+        // 删除 OFFLINE 拦截：已下线指标也可以编辑
         this.updatedAt = LocalDateTime.now();
         return repository.update(this);
+    }
+
+    /**
+     * 生成当前状态的快照领域对象（用于保存到历史表）
+     */
+    public Metric snapshot() {
+        Metric snap = new Metric();
+        snap.setMetricCode(this.metricCode);
+        snap.setMetricName(this.metricName);
+        snap.setMetricType(this.metricType);
+        snap.setSubjectCode(this.subjectCode);
+        snap.setBizCaliber(this.bizCaliber);
+        snap.setTechCaliber(this.techCaliber);
+        snap.setStatus(this.status);
+        snap.setOwner(this.owner);
+        snap.setVersion(this.version);
+        snap.setCreateBy(this.createBy);
+        snap.setUpdateBy(this.updateBy);
+        snap.setCreatedAt(this.createdAt);
+        snap.setUpdatedAt(this.updatedAt);
+        snap.setAtomicExt(this.atomicExt);
+        snap.setDerivedExt(this.derivedExt);
+        snap.setCompositeExt(this.compositeExt);
+        return snap;
     }
 
     /**

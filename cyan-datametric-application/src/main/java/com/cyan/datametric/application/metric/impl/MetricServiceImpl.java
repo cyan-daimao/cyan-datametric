@@ -118,6 +118,10 @@ public class MetricServiceImpl implements MetricService {
         if (!org.springframework.util.StringUtils.hasText(cmd.getDsName()) && existing.getAtomicExt() != null) {
             cmd.setDsName(existing.getAtomicExt().getDsName());
         }
+        // 如果当前是已发布状态，先保存快照，然后生成新版本草稿
+        if (existing.getStatus() == MetricStatus.PUBLISHED) {
+            metricRepository.saveSnapshot(existing);
+        }
         Metric metric = new Metric();
         metric.setId(id);
         metric.setMetricCode(existing.getMetricCode());
@@ -126,8 +130,8 @@ public class MetricServiceImpl implements MetricService {
         metric.setSubjectCode(cmd.getSubjectCode());
         metric.setBizCaliber(cmd.getBizCaliber());
         metric.setTechCaliber(cmd.getTechCaliber());
-        metric.setStatus(existing.getStatus());
-        metric.setVersion(existing.getVersion());
+        metric.setStatus(existing.getStatus() == MetricStatus.PUBLISHED ? MetricStatus.DRAFT : existing.getStatus());
+        metric.setVersion(existing.getStatus() == MetricStatus.PUBLISHED ? existing.getVersion() + 1 : existing.getVersion());
         metric.setOwner(existing.getOwner());
         metric.setCreateBy(existing.getCreateBy());
         metric.setUpdateBy(cmd.getUpdateBy());
@@ -163,6 +167,10 @@ public class MetricServiceImpl implements MetricService {
         Metric existing = metricRepository.findById(id);
         Assert.notNull(existing, new BusinessException("指标不存在"));
         checkNameDuplicateForUpdate(cmd.getMetricName(), id);
+        // 如果当前是已发布状态，先保存快照，然后生成新版本草稿
+        if (existing.getStatus() == MetricStatus.PUBLISHED) {
+            metricRepository.saveSnapshot(existing);
+        }
         Metric metric = new Metric();
         metric.setId(id);
         metric.setMetricCode(existing.getMetricCode());
@@ -171,8 +179,8 @@ public class MetricServiceImpl implements MetricService {
         metric.setSubjectCode(cmd.getSubjectCode());
         metric.setBizCaliber(cmd.getBizCaliber());
         metric.setTechCaliber(cmd.getTechCaliber());
-        metric.setStatus(existing.getStatus());
-        metric.setVersion(existing.getVersion());
+        metric.setStatus(existing.getStatus() == MetricStatus.PUBLISHED ? MetricStatus.DRAFT : existing.getStatus());
+        metric.setVersion(existing.getStatus() == MetricStatus.PUBLISHED ? existing.getVersion() + 1 : existing.getVersion());
         metric.setOwner(existing.getOwner());
         metric.setCreateBy(existing.getCreateBy());
         metric.setUpdateBy(cmd.getUpdateBy());
@@ -210,6 +218,10 @@ public class MetricServiceImpl implements MetricService {
         Metric existing = metricRepository.findById(id);
         Assert.notNull(existing, new BusinessException("指标不存在"));
         checkNameDuplicateForUpdate(cmd.getMetricName(), id);
+        // 如果当前是已发布状态，先保存快照，然后生成新版本草稿
+        if (existing.getStatus() == MetricStatus.PUBLISHED) {
+            metricRepository.saveSnapshot(existing);
+        }
         Metric metric = new Metric();
         metric.setId(id);
         metric.setMetricCode(existing.getMetricCode());
@@ -218,8 +230,8 @@ public class MetricServiceImpl implements MetricService {
         metric.setSubjectCode(cmd.getSubjectCode());
         metric.setBizCaliber(cmd.getBizCaliber());
         metric.setTechCaliber(cmd.getTechCaliber());
-        metric.setStatus(existing.getStatus());
-        metric.setVersion(existing.getVersion());
+        metric.setStatus(existing.getStatus() == MetricStatus.PUBLISHED ? MetricStatus.DRAFT : existing.getStatus());
+        metric.setVersion(existing.getStatus() == MetricStatus.PUBLISHED ? existing.getVersion() + 1 : existing.getVersion());
         metric.setOwner(existing.getOwner());
         metric.setCreateBy(existing.getCreateBy());
         metric.setUpdateBy(cmd.getUpdateBy());
@@ -389,6 +401,47 @@ public class MetricServiceImpl implements MetricService {
         bo.setStatusDistribution(new HashMap<>());
         bo.setChildren(List.of());
         return List.of(bo);
+    }
+
+    @Override
+    public List<MetricVersionBO> listVersions(String metricId) {
+        Metric metric = metricRepository.findById(metricId);
+        Assert.notNull(metric, new BusinessException("指标不存在"));
+        return metricRepository.findHistoryByMetricCode(metric.getMetricCode()).stream()
+                .map(m -> {
+                    MetricVersionBO bo = new MetricVersionBO();
+                    bo.setVersion(m.getVersion());
+                    bo.setMetricName(m.getMetricName());
+                    bo.setStatus(m.getStatus().name());
+                    bo.setSnapshotTime(m.getUpdatedAt());
+                    bo.setUpdateBy(m.getUpdateBy());
+                    return bo;
+                })
+                .toList();
+    }
+
+    @Override
+    @Transactional
+    public MetricBO rollback(String metricId, Integer version) {
+        Metric current = metricRepository.findById(metricId);
+        Assert.notNull(current, new BusinessException("指标不存在"));
+
+        // 1. 先快照当前状态
+        metricRepository.saveSnapshot(current);
+
+        // 2. 查找目标历史版本
+        Metric history = metricRepository.findHistoryByVersion(current.getMetricCode(), version);
+        Assert.notNull(history, new BusinessException("目标版本不存在"));
+
+        // 3. 历史覆盖主表（保持 id 不变）
+        history.setId(current.getId());
+        metricRepository.rollbackFromHistory(history);
+
+        // 4. 重建血缘
+        lineageRepository.deleteByMetricId(metricId);
+        buildLineage(history);
+
+        return toMetricBO(metricRepository.findById(metricId));
     }
 
     // ==================== 私有方法 ====================

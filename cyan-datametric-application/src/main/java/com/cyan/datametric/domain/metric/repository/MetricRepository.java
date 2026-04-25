@@ -63,4 +63,24 @@ public interface MetricRepository {
      * 按主题域统计
      */
     List<java.util.Map<String, Object>> countBySubject();
+
+    /**
+     * 保存指标快照到历史表
+     */
+    void saveSnapshot(Metric metric);
+
+    /**
+     * 查询指标的历史版本列表
+     */
+    List<Metric> findHistoryByMetricCode(String metricCode);
+
+    /**
+     * 根据指标编码和版本号查询历史记录
+     */
+    Metric findHistoryByVersion(String metricCode, Integer version);
+
+    /**
+     * 回退：用历史记录覆盖主表
+     */
+    Metric rollbackFromHistory(Metric historyMetric);
 }

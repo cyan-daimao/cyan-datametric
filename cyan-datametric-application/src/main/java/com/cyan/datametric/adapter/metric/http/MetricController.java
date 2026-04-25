@@ -153,4 +153,22 @@ public class MetricController {
         LineageTreeBO bo = metricService.lineage(id, direction, maxLevel);
         return Response.success(MetricAdapterConvert.INSTANCE.toLineageTreeDTO(bo));
     }
+
+    // ==================== 版本管理 ====================
+
+    @GetMapping("/{id}/versions")
+    public Response<List<MetricVersionDTO>> listVersions(@PathVariable("id") String id) {
+        List<MetricVersionBO> list = metricService.listVersions(id);
+        return Response.success(list.stream()
+                .map(MetricAdapterConvert.INSTANCE::toMetricVersionDTO)
+                .toList());
+    }
+
+    @PostMapping("/{id}/rollback/{version}")
+    public Response<MetricDetailDTO> rollback(
+            @PathVariable("id") String id,
+            @PathVariable("version") Integer version) {
+        MetricBO bo = metricService.rollback(id, version);
+        return Response.success(MetricAdapterConvert.INSTANCE.toMetricDetailDTO(bo));
+    }
 }

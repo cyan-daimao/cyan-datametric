@@ -9,6 +9,7 @@ import com.cyan.datametric.domain.metric.MetricDerivedExt;
 import com.cyan.datametric.infra.persistence.metric.dos.MetricAtomicDO;
 import com.cyan.datametric.infra.persistence.metric.dos.MetricCompositeDO;
 import com.cyan.datametric.infra.persistence.metric.dos.MetricDefinitionDO;
+import com.cyan.datametric.infra.persistence.metric.dos.MetricDefinitionHistoryDO;
 import com.cyan.datametric.infra.persistence.metric.dos.MetricDerivedDO;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -123,6 +124,80 @@ public interface MetricInfraConvert {
             d.setMetricRefs(JSON.toJSONString(composite.getMetricRefs()));
         }
         return d;
+    }
+
+    default MetricDefinitionHistoryDO toMetricDefinitionHistoryDO(Metric metric) {
+        if (metric == null) return null;
+        MetricDefinitionHistoryDO d = new MetricDefinitionHistoryDO();
+        d.setMetricCode(metric.getMetricCode());
+        d.setMetricName(metric.getMetricName());
+        d.setMetricType(metric.getMetricType() == null ? null : metric.getMetricType().name());
+        d.setSubjectCode(metric.getSubjectCode());
+        d.setBizCaliber(metric.getBizCaliber());
+        d.setTechCaliber(metric.getTechCaliber());
+        d.setStatus(metric.getStatus() == null ? null : metric.getStatus().name());
+        d.setOwner(metric.getOwner());
+        d.setVersion(metric.getVersion());
+        d.setCreateBy(metric.getCreateBy());
+        d.setUpdateBy(metric.getUpdateBy());
+        d.setCreatedAt(metric.getCreatedAt());
+        d.setUpdatedAt(metric.getUpdatedAt());
+        if (metric.getMetricType() != null) {
+            try {
+                ObjectMapper mapper = new ObjectMapper();
+                switch (metric.getMetricType()) {
+                    case ATOMIC -> {
+                        if (metric.getAtomicExt() != null) {
+                            d.setExtJson(mapper.writeValueAsString(metric.getAtomicExt()));
+                        }
+                    }
+                    case DERIVED -> {
+                        if (metric.getDerivedExt() != null) {
+                            d.setExtJson(mapper.writeValueAsString(metric.getDerivedExt()));
+                        }
+                    }
+                    case COMPOSITE -> {
+                        if (metric.getCompositeExt() != null) {
+                            d.setExtJson(mapper.writeValueAsString(metric.getCompositeExt()));
+                        }
+                    }
+                }
+            } catch (Exception e) {
+                d.setExtJson(null);
+            }
+        }
+        return d;
+    }
+
+    default Metric toMetric(MetricDefinitionHistoryDO history) {
+        if (history == null) return null;
+        Metric metric = new Metric();
+        metric.setMetricCode(history.getMetricCode());
+        metric.setMetricName(history.getMetricName());
+        metric.setMetricType(history.getMetricType() == null ? null : com.cyan.datametric.enums.MetricType.valueOf(history.getMetricType()));
+        metric.setSubjectCode(history.getSubjectCode());
+        metric.setBizCaliber(history.getBizCaliber());
+        metric.setTechCaliber(history.getTechCaliber());
+        metric.setStatus(history.getStatus() == null ? null : com.cyan.datametric.enums.MetricStatus.valueOf(history.getStatus()));
+        metric.setOwner(history.getOwner());
+        metric.setVersion(history.getVersion());
+        metric.setCreateBy(history.getCreateBy());
+        metric.setUpdateBy(history.getUpdateBy());
+        metric.setCreatedAt(history.getCreatedAt());
+        metric.setUpdatedAt(history.getUpdatedAt());
+        if (history.getExtJson() != null && !history.getExtJson().isEmpty() && metric.getMetricType() != null) {
+            try {
+                ObjectMapper mapper = new ObjectMapper();
+                switch (metric.getMetricType()) {
+                    case ATOMIC -> metric.setAtomicExt(mapper.readValue(history.getExtJson(), MetricAtomicExt.class));
+                    case DERIVED -> metric.setDerivedExt(mapper.readValue(history.getExtJson(), MetricDerivedExt.class));
+                    case COMPOSITE -> metric.setCompositeExt(mapper.readValue(history.getExtJson(), MetricCompositeExt.class));
+                }
+            } catch (Exception e) {
+                // ignore parse error
+            }
+        }
+        return metric;
     }
 
     private static <T> List<T> parseList(String json, Class<T> clazz) {

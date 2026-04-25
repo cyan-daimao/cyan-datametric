@@ -11,9 +11,11 @@ import com.cyan.datametric.infra.persistence.metric.convert.MetricInfraConvert;
 import com.cyan.datametric.infra.persistence.metric.dos.MetricAtomicDO;
 import com.cyan.datametric.infra.persistence.metric.dos.MetricCompositeDO;
 import com.cyan.datametric.infra.persistence.metric.dos.MetricDefinitionDO;
+import com.cyan.datametric.infra.persistence.metric.dos.MetricDefinitionHistoryDO;
 import com.cyan.datametric.infra.persistence.metric.dos.MetricDerivedDO;
 import com.cyan.datametric.infra.persistence.metric.mappers.MetricAtomicMapper;
 import com.cyan.datametric.infra.persistence.metric.mappers.MetricCompositeMapper;
+import com.cyan.datametric.infra.persistence.metric.mappers.MetricDefinitionHistoryMapper;
 import com.cyan.datametric.infra.persistence.metric.mappers.MetricDefinitionMapper;
 import com.cyan.datametric.infra.persistence.metric.mappers.MetricDerivedMapper;
 import com.cyan.datametric.infra.util.SnowflakeIdUtil;
@@ -37,15 +39,18 @@ public class MetricRepositoryImpl implements MetricRepository {
     private final MetricAtomicMapper atomicMapper;
     private final MetricDerivedMapper derivedMapper;
     private final MetricCompositeMapper compositeMapper;
+    private final MetricDefinitionHistoryMapper historyMapper;
 
     public MetricRepositoryImpl(MetricDefinitionMapper definitionMapper,
                                 MetricAtomicMapper atomicMapper,
                                 MetricDerivedMapper derivedMapper,
-                                MetricCompositeMapper compositeMapper) {
+                                MetricCompositeMapper compositeMapper,
+                                MetricDefinitionHistoryMapper historyMapper) {
         this.definitionMapper = definitionMapper;
         this.atomicMapper = atomicMapper;
         this.derivedMapper = derivedMapper;
         this.compositeMapper = compositeMapper;
+        this.historyMapper = historyMapper;
     }
 
     @Override
@@ -150,6 +155,43 @@ public class MetricRepositoryImpl implements MetricRepository {
         LambdaQueryWrapper<MetricDefinitionDO> wrapper = new LambdaQueryWrapper<MetricDefinitionDO>()
                 .eq(MetricDefinitionDO::getStatus, MetricStatus.valueOf(status));
         return definitionMapper.selectCount(wrapper);
+    }
+
+    @Override
+    public void saveSnapshot(Metric metric) {
+        MetricDefinitionHistoryDO historyDO = MetricInfraConvert.INSTANCE.toMetricDefinitionHistoryDO(metric);
+        historyMapper.insert(historyDO);
+    }
+
+    @Override
+    public List<Metric> findHistoryByMetricCode(String metricCode) {
+        LambdaQueryWrapper<MetricDefinitionHistoryDO> wrapper = new LambdaQueryWrapper<MetricDefinitionHistoryDO>()
+                .eq(MetricDefinitionHistoryDO::getMetricCode, metricCode)
+                .orderByDesc(MetricDefinitionHistoryDO::getVersion);
+        List<MetricDefinitionHistoryDO> list = historyMapper.selectList(wrapper);
+        return list.stream()
+                .map(MetricInfraConvert.INSTANCE::toMetric)
+                .toList();
+    }
+
+    @Override
+    public Metric findHistoryByVersion(String metricCode, Integer version) {
+        LambdaQueryWrapper<MetricDefinitionHistoryDO> wrapper = new LambdaQueryWrapper<MetricDefinitionHistoryDO>()
+                .eq(MetricDefinitionHistoryDO::getMetricCode, metricCode)
+                .eq(MetricDefinitionHistoryDO::getVersion, version);
+        MetricDefinitionHistoryDO history = historyMapper.selectOne(wrapper);
+        if (history == null) {
+            return null;
+        }
+        return MetricInfraConvert.INSTANCE.toMetric(history);
+    }
+
+    @Override
+    public Metric rollbackFromHistory(Metric historyMetric) {
+        MetricDefinitionDO def = MetricInfraConvert.INSTANCE.toMetricDefinitionDO(historyMetric);
+        definitionMapper.updateById(def);
+        updateExt(historyMetric);
+        return findById(historyMetric.getId());
     }
 
     @Override

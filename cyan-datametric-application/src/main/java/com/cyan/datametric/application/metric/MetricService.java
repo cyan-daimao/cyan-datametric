@@ -104,4 +104,14 @@ public interface MetricService {
      * 主题域下钻
      */
     List<SubjectDrilldownBO> subjectDrilldown(String subjectCode);
+
+    /**
+     * 查询指标版本历史
+     */
+    List<MetricVersionBO> listVersions(String metricId);
+
+    /**
+     * 回退到指定版本
+     */
+    MetricBO rollback(String metricId, Integer version);
 }

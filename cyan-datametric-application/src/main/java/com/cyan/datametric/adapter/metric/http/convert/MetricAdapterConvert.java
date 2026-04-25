@@ -141,4 +141,15 @@ public interface MetricAdapterConvert {
         }
         return dto;
     }
+
+    default MetricVersionDTO toMetricVersionDTO(MetricVersionBO bo) {
+        if (bo == null) return null;
+        MetricVersionDTO dto = new MetricVersionDTO();
+        dto.setVersion(bo.getVersion());
+        dto.setMetricName(bo.getMetricName());
+        dto.setStatus(bo.getStatus());
+        dto.setSnapshotTime(bo.getSnapshotTime());
+        dto.setUpdateBy(bo.getUpdateBy());
+        return dto;
+    }
 }

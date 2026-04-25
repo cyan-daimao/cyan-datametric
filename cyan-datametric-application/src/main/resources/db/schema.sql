@@ -222,3 +222,25 @@ INSERT INTO metric_dimension(dim_code, dim_name, dim_type, data_type, dim_values
 ('DIM_DEVICE_TYPE', '设备类型', 'ENUM', 'STRING', '["iOS","Android","PC","Mac"]', (SELECT id FROM metric_dimension_category WHERE name='设备信息'), 'd_device', 'device_type', '用户设备类型'),
 ('DIM_USER_TYPE', '用户类型', 'ENUM', 'STRING', '["新用户","老用户","回流用户"]', (SELECT id FROM metric_dimension_category WHERE name='用户属性'), 'd_user_type', 'user_type', '用户类型划分'),
 ('DIM_PAYMENT_METHOD', '支付方式', 'ENUM', 'STRING', '["支付宝","微信支付","银行卡"]', (SELECT id FROM metric_dimension_category WHERE name='交易属性'), 'd_payment_method', 'payment_method', '订单支付方式');
+
+-- 指标定义历史快照表
+CREATE TABLE IF NOT EXISTS metric_definition_history (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY COMMENT '主键',
+    metric_code VARCHAR(64) NOT NULL COMMENT '指标编码',
+    metric_name VARCHAR(128) NOT NULL COMMENT '指标名称',
+    metric_type VARCHAR(32) NOT NULL COMMENT '指标类型',
+    subject_code VARCHAR(64) COMMENT '主题域编码',
+    biz_caliber TEXT COMMENT '业务口径',
+    tech_caliber TEXT COMMENT '技术口径',
+    status VARCHAR(32) NOT NULL COMMENT '状态',
+    owner VARCHAR(64) COMMENT '负责人',
+    version INT NOT NULL COMMENT '快照时的版本号',
+    create_by VARCHAR(64) COMMENT '创建人',
+    update_by VARCHAR(64) COMMENT '修改人',
+    created_at DATETIME COMMENT '创建时间',
+    updated_at DATETIME COMMENT '更新时间',
+    ext_json JSON COMMENT '扩展信息快照（原子/派生/复合）',
+    snapshot_time DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '快照时间',
+    INDEX idx_metric_code (metric_code),
+    INDEX idx_metric_version (metric_code, version)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='指标定义历史快照表';
