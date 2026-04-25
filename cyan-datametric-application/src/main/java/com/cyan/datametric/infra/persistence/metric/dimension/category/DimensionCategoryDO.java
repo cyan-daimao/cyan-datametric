@@ -1,4 +1,4 @@
-package com.cyan.datametric.infra.persistence.config.dos;
+package com.cyan.datametric.infra.persistence.metric.dimension.category;
 
 import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
@@ -12,7 +12,7 @@ import lombok.experimental.Accessors;
 import java.time.LocalDateTime;
 
 /**
- * 公共维度表
+ * 维度分类表
  *
  * @author cy.Y
  * @since 1.0.0
@@ -21,8 +21,8 @@ import java.time.LocalDateTime;
 @NoArgsConstructor
 @Data
 @Accessors(chain = true)
-@TableName("metric_dimension")
-public class MetricDimensionDO {
+@TableName("metric_dimension_category")
+public class DimensionCategoryDO {
 
     /**
      * 主键
@@ -31,58 +31,28 @@ public class MetricDimensionDO {
     private Long id;
 
     /**
-     * 维度编码
+     * 分类名称
      */
-    @TableField("dim_code")
-    private String dimCode;
+    @TableField("name")
+    private String name;
 
     /**
-     * 维度名称
+     * 父分类ID
      */
-    @TableField("dim_name")
-    private String dimName;
+    @TableField("parent_id")
+    private Long parentId;
 
     /**
-     * 维度类型
+     * 层级
      */
-    @TableField("dim_type")
-    private String dimType;
+    @TableField("level")
+    private Integer level;
 
     /**
-     * 数据类型
+     * 排序号
      */
-    @TableField("data_type")
-    private String dataType;
-
-    /**
-     * 维度可选值
-     */
-    @TableField("dim_values")
-    private String dimValues;
-
-    /**
-     * 维度分类ID
-     */
-    @TableField("category_id")
-    private Long categoryId;
-
-    /**
-     * 关联数仓维表名
-     */
-    @TableField("table_name")
-    private String tableName;
-
-    /**
-     * 关联维表字段名
-     */
-    @TableField("column_name")
-    private String columnName;
-
-    /**
-     * 描述
-     */
-    @TableField("description")
-    private String description;
+    @TableField("sort_order")
+    private Integer sortOrder;
 
     /**
      * 创建人

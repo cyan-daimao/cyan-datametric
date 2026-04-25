@@ -9,6 +9,7 @@ import lombok.NoArgsConstructor;
 import lombok.experimental.Accessors;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 /**
  * 公共维度领域对象（充血模型）
@@ -38,24 +39,34 @@ public class Dimension {
     private String dimName;
 
     /**
-     * 数据源名称
+     * 维度类型
      */
-    private String dsName;
+    private String dimType;
 
     /**
-     * 数据库名称
+     * 数据类型
      */
-    private String dbName;
+    private String dataType;
 
     /**
-     * 表名称
+     * 维度可选值
      */
-    private String tblName;
+    private List<String> dimValues;
 
     /**
-     * 字段名称
+     * 维度分类ID
      */
-    private String colName;
+    private String categoryId;
+
+    /**
+     * 关联数仓维表名
+     */
+    private String tableName;
+
+    /**
+     * 关联维表字段名
+     */
+    private String columnName;
 
     /**
      * 描述
@@ -85,10 +96,6 @@ public class Dimension {
     private void validate() {
         Assert.notBlank(this.dimCode, new BusinessException("维度编码不能为空"));
         Assert.notBlank(this.dimName, new BusinessException("维度名称不能为空"));
-        Assert.notBlank(this.dsName, new BusinessException("数据源名称不能为空"));
-        Assert.notBlank(this.dbName, new BusinessException("数据库名称不能为空"));
-        Assert.notBlank(this.tblName, new BusinessException("表名称不能为空"));
-        Assert.notBlank(this.colName, new BusinessException("字段名称不能为空"));
     }
 
     public Dimension save(DimensionRepository repository) {

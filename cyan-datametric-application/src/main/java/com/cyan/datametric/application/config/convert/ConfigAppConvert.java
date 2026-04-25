@@ -36,10 +36,12 @@ public interface ConfigAppConvert {
         Dimension d = new Dimension();
         d.setDimCode(cmd.getDimCode());
         d.setDimName(cmd.getDimName());
-        d.setDsName(cmd.getDsName());
-        d.setDbName(cmd.getDbName());
-        d.setTblName(cmd.getTblName());
-        d.setColName(cmd.getColName());
+        d.setDimType(cmd.getDimType());
+        d.setDataType(cmd.getDataType());
+        d.setDimValues(cmd.getDimValues());
+        d.setCategoryId(cmd.getCategoryId());
+        d.setTableName(cmd.getTableName());
+        d.setColumnName(cmd.getColumnName());
         d.setDescription(cmd.getDescription());
         d.setCreateBy(cmd.getCreateBy());
         d.setUpdateBy(cmd.getUpdateBy());

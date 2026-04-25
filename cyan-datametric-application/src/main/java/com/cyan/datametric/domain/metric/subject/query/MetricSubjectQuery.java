@@ -1,16 +1,16 @@
-package com.cyan.datametric.domain.config.query;
+package com.cyan.datametric.domain.metric.subject.query;
 
 import com.cyan.arch.common.api.Pageable;
 import lombok.Data;
 
 /**
- * 公共维度分页查询
+ * 指标主题域查询
  *
  * @author cy.Y
  * @since 1.0.0
  */
 @Data
-public class DimensionPageQuery implements Pageable {
+public class MetricSubjectQuery implements Pageable {
 
     /**
      * 页码
@@ -23,14 +23,9 @@ public class DimensionPageQuery implements Pageable {
     private long pageSize = 20;
 
     /**
-     * 维度名称（模糊）
+     * 主题域名称（模糊）
      */
-    private String dimName;
-
-    /**
-     * 维度分类ID
-     */
-    private String categoryId;
+    private String subjectName;
 
     @Override
     public long current() {

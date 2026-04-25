@@ -2,6 +2,8 @@ package com.cyan.datametric.application.config.cmd;
 
 import lombok.Data;
 
+import java.util.List;
+
 /**
  * 公共维度命令
  *
@@ -22,24 +24,34 @@ public class DimensionCmd {
     private String dimName;
 
     /**
-     * 数据源名称
+     * 维度类型
      */
-    private String dsName;
+    private String dimType;
 
     /**
-     * 数据库名称
+     * 数据类型
      */
-    private String dbName;
+    private String dataType;
 
     /**
-     * 表名称
+     * 维度可选值
      */
-    private String tblName;
+    private List<String> dimValues;
 
     /**
-     * 字段名称
+     * 维度分类ID
      */
-    private String colName;
+    private String categoryId;
+
+    /**
+     * 关联数仓维表名
+     */
+    private String tableName;
+
+    /**
+     * 关联维表字段名
+     */
+    private String columnName;
 
     /**
      * 描述

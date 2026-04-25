@@ -78,10 +78,19 @@ public interface ConfigInfraConvert {
         d.setId(dimensionDO.getId() == null ? null : String.valueOf(dimensionDO.getId()));
         d.setDimCode(dimensionDO.getDimCode());
         d.setDimName(dimensionDO.getDimName());
-        d.setDsName(dimensionDO.getDsName());
-        d.setDbName(dimensionDO.getDbName());
-        d.setTblName(dimensionDO.getTblName());
-        d.setColName(dimensionDO.getColName());
+        d.setDimType(dimensionDO.getDimType());
+        d.setDataType(dimensionDO.getDataType());
+        if (dimensionDO.getDimValues() != null && !dimensionDO.getDimValues().isEmpty()) {
+            try {
+                ObjectMapper mapper = new ObjectMapper();
+                d.setDimValues(mapper.readValue(dimensionDO.getDimValues(), new TypeReference<List<String>>() {}));
+            } catch (Exception e) {
+                d.setDimValues(null);
+            }
+        }
+        d.setCategoryId(dimensionDO.getCategoryId() == null ? null : String.valueOf(dimensionDO.getCategoryId()));
+        d.setTableName(dimensionDO.getTableName());
+        d.setColumnName(dimensionDO.getColumnName());
         d.setDescription(dimensionDO.getDescription());
         d.setCreateBy(dimensionDO.getCreateBy());
         d.setUpdateBy(dimensionDO.getUpdateBy());
@@ -96,10 +105,14 @@ public interface ConfigInfraConvert {
         d.setId(dimension.getId() == null ? null : Long.parseLong(dimension.getId()));
         d.setDimCode(dimension.getDimCode());
         d.setDimName(dimension.getDimName());
-        d.setDsName(dimension.getDsName());
-        d.setDbName(dimension.getDbName());
-        d.setTblName(dimension.getTblName());
-        d.setColName(dimension.getColName());
+        d.setDimType(dimension.getDimType());
+        d.setDataType(dimension.getDataType());
+        if (dimension.getDimValues() != null) {
+            d.setDimValues(JSON.toJSONString(dimension.getDimValues()));
+        }
+        d.setCategoryId(dimension.getCategoryId() == null ? null : Long.parseLong(dimension.getCategoryId()));
+        d.setTableName(dimension.getTableName());
+        d.setColumnName(dimension.getColumnName());
         d.setDescription(dimension.getDescription());
         d.setCreateBy(dimension.getCreateBy());
         d.setUpdateBy(dimension.getUpdateBy());

@@ -1,4 +1,4 @@
-package com.cyan.datametric.infra.persistence.config.dos;
+package com.cyan.datametric.infra.persistence.metric.subject;
 
 import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
@@ -12,7 +12,7 @@ import lombok.experimental.Accessors;
 import java.time.LocalDateTime;
 
 /**
- * 公共维度表
+ * 指标主题域表
  *
  * @author cy.Y
  * @since 1.0.0
@@ -21,8 +21,8 @@ import java.time.LocalDateTime;
 @NoArgsConstructor
 @Data
 @Accessors(chain = true)
-@TableName("metric_dimension")
-public class MetricDimensionDO {
+@TableName("metric_subject")
+public class MetricSubjectDO {
 
     /**
      * 主键
@@ -31,58 +31,40 @@ public class MetricDimensionDO {
     private Long id;
 
     /**
-     * 维度编码
+     * 主题域编码
      */
-    @TableField("dim_code")
-    private String dimCode;
+    @TableField("subject_code")
+    private String subjectCode;
 
     /**
-     * 维度名称
+     * 主题域名称
      */
-    @TableField("dim_name")
-    private String dimName;
+    @TableField("subject_name")
+    private String subjectName;
 
     /**
-     * 维度类型
+     * 主题域描述
      */
-    @TableField("dim_type")
-    private String dimType;
+    @TableField("subject_desc")
+    private String subjectDesc;
 
     /**
-     * 数据类型
+     * 父节点ID
      */
-    @TableField("data_type")
-    private String dataType;
+    @TableField("parent_id")
+    private Long parentId;
 
     /**
-     * 维度可选值
+     * 层级
      */
-    @TableField("dim_values")
-    private String dimValues;
+    @TableField("level")
+    private Integer level;
 
     /**
-     * 维度分类ID
+     * 排序号
      */
-    @TableField("category_id")
-    private Long categoryId;
-
-    /**
-     * 关联数仓维表名
-     */
-    @TableField("table_name")
-    private String tableName;
-
-    /**
-     * 关联维表字段名
-     */
-    @TableField("column_name")
-    private String columnName;
-
-    /**
-     * 描述
-     */
-    @TableField("description")
-    private String description;
+    @TableField("sort_order")
+    private Integer sortOrder;
 
     /**
      * 创建人

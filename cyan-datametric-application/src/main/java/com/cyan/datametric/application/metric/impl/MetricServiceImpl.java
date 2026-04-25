@@ -15,6 +15,8 @@ import com.cyan.datametric.domain.config.TimePeriod;
 import com.cyan.datametric.domain.config.repository.ModifierRepository;
 import com.cyan.datametric.domain.config.repository.TimePeriodRepository;
 import com.cyan.datametric.domain.metric.*;
+import com.cyan.datametric.domain.metric.subject.MetricSubject;
+import com.cyan.datametric.domain.metric.subject.repository.MetricSubjectRepository;
 import com.cyan.datametric.domain.metric.query.MetricPageQuery;
 import com.cyan.datametric.domain.metric.repository.MetricFavoriteRepository;
 import com.cyan.datametric.domain.metric.repository.MetricLineageRepository;
@@ -24,6 +26,7 @@ import com.cyan.datametric.enums.MetricType;
 import com.cyan.datametric.enums.PeriodType;
 import com.cyan.datametric.enums.StatFunc;
 import com.cyan.datametric.infra.util.SnowflakeIdUtil;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -45,19 +48,25 @@ public class MetricServiceImpl implements MetricService {
     private final MetricFavoriteRepository favoriteRepository;
     private final ModifierRepository modifierRepository;
     private final TimePeriodRepository timePeriodRepository;
+    private final MetricSubjectRepository metricSubjectRepository;
     private final DatamanDsClient datamanDsClient;
+
+    @Value("${datametric.default-datasource:cyan_iceberg}")
+    private String defaultDatasource;
 
     public MetricServiceImpl(MetricRepository metricRepository,
                              MetricLineageRepository lineageRepository,
                              MetricFavoriteRepository favoriteRepository,
                              ModifierRepository modifierRepository,
                              TimePeriodRepository timePeriodRepository,
+                             MetricSubjectRepository metricSubjectRepository,
                              DatamanDsClient datamanDsClient) {
         this.metricRepository = metricRepository;
         this.lineageRepository = lineageRepository;
         this.favoriteRepository = favoriteRepository;
         this.modifierRepository = modifierRepository;
         this.timePeriodRepository = timePeriodRepository;
+        this.metricSubjectRepository = metricSubjectRepository;
         this.datamanDsClient = datamanDsClient;
     }
 
@@ -67,6 +76,7 @@ public class MetricServiceImpl implements MetricService {
         List<MetricBO> list = page.getData().stream()
                 .map(this::toMetricBO)
                 .toList();
+        fillSubjectName(list);
         return new Page<>(list, page.getCurrent(), page.getSize(), page.getTotal());
     }
 
@@ -74,13 +84,18 @@ public class MetricServiceImpl implements MetricService {
     public MetricBO detail(String id) {
         Metric metric = metricRepository.findById(id);
         Assert.notNull(metric, new BusinessException("指标不存在"));
-        return toDetailBO(metric);
+        MetricBO bo = toDetailBO(metric);
+        fillSubjectName(bo);
+        return bo;
     }
 
     @Override
     @Transactional
     public MetricBO createAtomic(AtomicMetricCmd cmd) {
         checkNameDuplicate(cmd.getMetricName());
+        if (!org.springframework.util.StringUtils.hasText(cmd.getDsName())) {
+            cmd.setDsName(defaultDatasource);
+        }
         Metric metric = new Metric();
         metric.setMetricCode("M" + SnowflakeIdUtil.nextId());
         metric.setMetricName(cmd.getMetricName());
@@ -102,6 +117,9 @@ public class MetricServiceImpl implements MetricService {
         Metric existing = metricRepository.findById(id);
         Assert.notNull(existing, new BusinessException("指标不存在"));
         checkNameDuplicateForUpdate(cmd.getMetricName(), id);
+        if (!org.springframework.util.StringUtils.hasText(cmd.getDsName()) && existing.getAtomicExt() != null) {
+            cmd.setDsName(existing.getAtomicExt().getDsName());
+        }
         Metric metric = new Metric();
         metric.setId(id);
         metric.setMetricCode(existing.getMetricCode());
@@ -307,6 +325,7 @@ public class MetricServiceImpl implements MetricService {
                     return bo;
                 })
                 .toList();
+        fillSubjectName(list);
         return new Page<>(list, page.getCurrent(), page.getSize(), page.getTotal());
     }
 
@@ -375,6 +394,39 @@ public class MetricServiceImpl implements MetricService {
     }
 
     // ==================== 私有方法 ====================
+
+    private void fillSubjectName(List<MetricBO> bos) {
+        if (bos == null || bos.isEmpty()) {
+            return;
+        }
+        List<String> subjectCodes = bos.stream()
+                .map(MetricBO::getSubjectCode)
+                .filter(sc -> sc != null && !sc.isBlank())
+                .distinct()
+                .toList();
+        if (subjectCodes.isEmpty()) {
+            return;
+        }
+        List<MetricSubject> subjects = metricSubjectRepository.findBySubjectCodes(subjectCodes);
+        Map<String, String> nameMap = subjects.stream()
+                .filter(s -> s.getSubjectCode() != null)
+                .collect(Collectors.toMap(MetricSubject::getSubjectCode, MetricSubject::getSubjectName, (a, b) -> a));
+        for (MetricBO bo : bos) {
+            if (bo.getSubjectCode() != null) {
+                bo.setSubjectName(nameMap.get(bo.getSubjectCode()));
+            }
+        }
+    }
+
+    private void fillSubjectName(MetricBO bo) {
+        if (bo == null || bo.getSubjectCode() == null || bo.getSubjectCode().isBlank()) {
+            return;
+        }
+        MetricSubject subject = metricSubjectRepository.findBySubjectCode(bo.getSubjectCode());
+        if (subject != null) {
+            bo.setSubjectName(subject.getSubjectName());
+        }
+    }
 
     private void checkNameDuplicate(String metricName) {
         Metric existing = metricRepository.findByName(metricName);
