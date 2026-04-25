@@ -24,13 +24,11 @@ import com.cyan.datametric.domain.metric.repository.MetricRepository;
 import com.cyan.datametric.enums.MetricStatus;
 import com.cyan.datametric.enums.MetricType;
 import com.cyan.datametric.enums.PeriodType;
-import com.cyan.datametric.enums.StatFunc;
 import com.cyan.datametric.infra.util.SnowflakeIdUtil;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDateTime;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -500,12 +498,19 @@ public class MetricServiceImpl implements MetricService {
         };
     }
 
+    private String buildAggExpression(String func, String col) {
+        if ("COUNT_DISTINCT".equals(func)) {
+            return "COUNT(DISTINCT " + col + ")";
+        }
+        return func + "(" + col + ")";
+    }
+
     private String buildAtomicSql(SqlPreviewCmd.DefinitionBody body) {
         String func = body.getStatFunc();
         String col = body.getColName();
         String table = body.getDbName() + "." + body.getTblName();
         StringBuilder sql = new StringBuilder();
-        sql.append("SELECT ").append(func).append("(").append(col).append(") as ").append(col).append(" FROM ").append(table);
+        sql.append("SELECT ").append(buildAggExpression(func, col)).append(" as ").append(col).append(" FROM ").append(table);
         List<String> conditions = new ArrayList<>();
         if (body.getFilterCondition() != null) {
             for (AtomicMetricCmd.FilterConditionCmd f : body.getFilterCondition()) {
@@ -534,7 +539,7 @@ public class MetricServiceImpl implements MetricService {
                 selectCols.add(g.getCol());
             }
         }
-        selectCols.add(func + "(" + col + ") as " + col);
+        selectCols.add(buildAggExpression(func, col) + " as " + col);
         sql.append("SELECT ").append(String.join(", ", selectCols)).append(" FROM ").append(table);
 
         List<String> conditions = new ArrayList<>();
