@@ -1,8 +1,8 @@
 spring:
   config:
     import:
-      - "nacos:arch-base.yaml?group=DEFAULT_GROUP&namespace=dev"
-      - "nacos:cyan-datametric.yaml?group=DEFAULT_GROUP&namespace=dev"
+      - "nacos:arch-base.yaml?group=DEFAULT_GROUP&namespace=prod"
+      - "nacos:cyan-datametric.yaml?group=DEFAULT_GROUP&namespace=prod"
   cloud:
     nacos:
       server-addr: 10.0.0.2:8848
@@ -10,10 +10,10 @@ spring:
       password: nacos
       config:
         file-extension: yaml
-        namespace: dev
+        namespace: prod
       discovery:
         ephemeral: true
-        namespace: dev
+        namespace: prod
   datasource:
     driver-class-name: com.mysql.cj.jdbc.Driver
     username: root
