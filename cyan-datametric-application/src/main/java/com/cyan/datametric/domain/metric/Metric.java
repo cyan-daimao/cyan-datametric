@@ -158,7 +158,7 @@ public class Metric {
      */
     public Metric publish(MetricRepository repository) {
         Assert.notBlank(this.id, new BusinessException("ID不能为空"));
-        Assert.isTrue(this.status == MetricStatus.DRAFT, new BusinessException("只有草稿状态的指标可发布"));
+        Assert.isTrue(this.status == MetricStatus.DRAFT || this.status == MetricStatus.OFFLINE, new BusinessException("只有草稿或已下线状态的指标可发布"));
         this.status = MetricStatus.PUBLISHED;
         this.updatedAt = LocalDateTime.now();
         return repository.update(this);
