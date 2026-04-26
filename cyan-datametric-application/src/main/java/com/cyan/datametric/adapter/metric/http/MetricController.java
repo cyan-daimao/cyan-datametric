@@ -10,6 +10,7 @@ import com.cyan.datametric.application.metric.cmd.*;
 import com.cyan.datametric.domain.metric.query.MetricPageQuery;
 import com.cyan.employee.login.filter.UserContextHolder;
 import jakarta.validation.Valid;
+import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -22,13 +23,11 @@ import java.util.List;
  */
 @RestController
 @RequestMapping("/api/v1/metrics")
+@RequiredArgsConstructor
 public class MetricController {
 
     private final MetricService metricService;
 
-    public MetricController(MetricService metricService) {
-        this.metricService = metricService;
-    }
 
     // ==================== 指标定义 ====================
 
@@ -110,12 +109,6 @@ public class MetricController {
     public Response<String> previewSql(@RequestBody SqlPreviewCmd cmd) {
         String sql = metricService.previewSql(cmd);
         return Response.success(sql);
-    }
-
-    @PostMapping("/trial")
-    public Response<SqlTrialResultDTO> trialSql(@RequestBody SqlTrialCmd cmd) {
-        SqlTrialResultBO bo = metricService.trialSql(cmd);
-        return Response.success(MetricAdapterConvert.INSTANCE.toSqlTrialResultDTO(bo));
     }
 
     // ==================== 指标字典 ====================

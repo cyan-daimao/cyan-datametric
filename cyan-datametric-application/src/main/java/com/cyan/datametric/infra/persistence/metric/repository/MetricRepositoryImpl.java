@@ -81,6 +81,24 @@ public class MetricRepositoryImpl implements MetricRepository {
     }
 
     @Override
+    public com.cyan.arch.common.api.Page<Metric> pageByIds(List<String> ids, MetricPageQuery query) {
+        Page<MetricDefinitionDO> page = new Page<>(query.current(), query.size());
+        List<Long> idList = ids.stream().map(Long::parseLong).toList();
+        LambdaQueryWrapper<MetricDefinitionDO> wrapper = new LambdaQueryWrapper<MetricDefinitionDO>()
+                .in(MetricDefinitionDO::getId, idList)
+                .like(StringUtils.isNotBlank(query.getMetricName()), MetricDefinitionDO::getMetricName, query.getMetricName())
+                .eq(StringUtils.isNotBlank(query.getMetricType()), MetricDefinitionDO::getMetricType, MetricType.of(query.getMetricType()))
+                .eq(StringUtils.isNotBlank(query.getSubjectCode()), MetricDefinitionDO::getSubjectCode, query.getSubjectCode())
+                .eq(StringUtils.isNotBlank(query.getStatus()), MetricDefinitionDO::getStatus, MetricStatus.of(query.getStatus()))
+                .orderByDesc(MetricDefinitionDO::getUpdatedAt);
+        Page<MetricDefinitionDO> result = definitionMapper.selectPage(page, wrapper);
+        List<Metric> list = Optional.ofNullable(result.getRecords()).orElse(List.of()).stream()
+                .map(MetricInfraConvert.INSTANCE::toMetric)
+                .toList();
+        return new com.cyan.arch.common.api.Page<>(list, result.getCurrent(), result.getSize(), result.getTotal());
+    }
+
+    @Override
     public Metric findByName(String metricName) {
         LambdaQueryWrapper<MetricDefinitionDO> wrapper = new LambdaQueryWrapper<MetricDefinitionDO>()
                 .eq(MetricDefinitionDO::getMetricName, metricName);

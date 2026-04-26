@@ -7,24 +7,24 @@ import com.cyan.datametric.application.metric.MetricService;
 import com.cyan.datametric.application.metric.bo.*;
 import com.cyan.datametric.application.metric.cmd.*;
 import com.cyan.datametric.application.metric.convert.MetricAppConvert;
-import com.cyan.dataman.client.DatamanDsClient;
-import com.cyan.dataman.client.dto.SqlExecuteCmd;
-import com.cyan.dataman.client.dto.SqlResultDTO;
 import com.cyan.datametric.domain.config.Modifier;
 import com.cyan.datametric.domain.config.TimePeriod;
 import com.cyan.datametric.domain.config.repository.ModifierRepository;
 import com.cyan.datametric.domain.config.repository.TimePeriodRepository;
-import com.cyan.datametric.domain.metric.*;
-import com.cyan.datametric.domain.metric.subject.MetricSubject;
-import com.cyan.datametric.domain.metric.subject.repository.MetricSubjectRepository;
+import com.cyan.datametric.domain.metric.LineageNode;
+import com.cyan.datametric.domain.metric.Metric;
+import com.cyan.datametric.domain.metric.MetricAtomicExt;
 import com.cyan.datametric.domain.metric.query.MetricPageQuery;
 import com.cyan.datametric.domain.metric.repository.MetricFavoriteRepository;
 import com.cyan.datametric.domain.metric.repository.MetricLineageRepository;
 import com.cyan.datametric.domain.metric.repository.MetricRepository;
+import com.cyan.datametric.domain.metric.subject.MetricSubject;
+import com.cyan.datametric.domain.metric.subject.repository.MetricSubjectRepository;
 import com.cyan.datametric.enums.MetricStatus;
 import com.cyan.datametric.enums.MetricType;
 import com.cyan.datametric.enums.PeriodType;
 import com.cyan.datametric.infra.util.SnowflakeIdUtil;
+import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -39,6 +39,7 @@ import java.util.stream.Collectors;
  * @since 1.0.0
  */
 @Service
+@RequiredArgsConstructor
 public class MetricServiceImpl implements MetricService {
 
     private final MetricRepository metricRepository;
@@ -47,26 +48,10 @@ public class MetricServiceImpl implements MetricService {
     private final ModifierRepository modifierRepository;
     private final TimePeriodRepository timePeriodRepository;
     private final MetricSubjectRepository metricSubjectRepository;
-    private final DatamanDsClient datamanDsClient;
 
     @Value("${datametric.default-datasource:cyan_iceberg}")
     private String defaultDatasource;
 
-    public MetricServiceImpl(MetricRepository metricRepository,
-                             MetricLineageRepository lineageRepository,
-                             MetricFavoriteRepository favoriteRepository,
-                             ModifierRepository modifierRepository,
-                             TimePeriodRepository timePeriodRepository,
-                             MetricSubjectRepository metricSubjectRepository,
-                             DatamanDsClient datamanDsClient) {
-        this.metricRepository = metricRepository;
-        this.lineageRepository = lineageRepository;
-        this.favoriteRepository = favoriteRepository;
-        this.modifierRepository = modifierRepository;
-        this.timePeriodRepository = timePeriodRepository;
-        this.metricSubjectRepository = metricSubjectRepository;
-        this.datamanDsClient = datamanDsClient;
-    }
 
     @Override
     public Page<MetricBO> page(MetricPageQuery query, String currentUser) {
@@ -101,7 +86,7 @@ public class MetricServiceImpl implements MetricService {
         metric.setSubjectCode(cmd.getSubjectCode());
         metric.setBizCaliber(cmd.getBizCaliber());
         metric.setTechCaliber(cmd.getTechCaliber());
-        metric.setOwner(cmd.getCreateBy());
+        metric.setOwner(cmd.getOwner());
         metric.setCreateBy(cmd.getCreateBy());
         metric.setUpdateBy(cmd.getUpdateBy());
         metric.setAtomicExt(MetricAppConvert.INSTANCE.toAtomicExt(cmd));
@@ -132,7 +117,7 @@ public class MetricServiceImpl implements MetricService {
         metric.setTechCaliber(cmd.getTechCaliber());
         metric.setStatus(existing.getStatus() == MetricStatus.PUBLISHED ? MetricStatus.DRAFT : existing.getStatus());
         metric.setVersion(existing.getStatus() == MetricStatus.PUBLISHED ? existing.getVersion() + 1 : existing.getVersion());
-        metric.setOwner(existing.getOwner());
+        metric.setOwner(cmd.getOwner());
         metric.setCreateBy(existing.getCreateBy());
         metric.setUpdateBy(cmd.getUpdateBy());
         metric.setCreatedAt(existing.getCreatedAt());
@@ -152,7 +137,7 @@ public class MetricServiceImpl implements MetricService {
         metric.setSubjectCode(cmd.getSubjectCode());
         metric.setBizCaliber(cmd.getBizCaliber());
         metric.setTechCaliber(cmd.getTechCaliber());
-        metric.setOwner(cmd.getCreateBy());
+        metric.setOwner(cmd.getOwner());
         metric.setCreateBy(cmd.getCreateBy());
         metric.setUpdateBy(cmd.getUpdateBy());
         metric.setDerivedExt(MetricAppConvert.INSTANCE.toDerivedExt(cmd));
@@ -181,7 +166,7 @@ public class MetricServiceImpl implements MetricService {
         metric.setTechCaliber(cmd.getTechCaliber());
         metric.setStatus(existing.getStatus() == MetricStatus.PUBLISHED ? MetricStatus.DRAFT : existing.getStatus());
         metric.setVersion(existing.getStatus() == MetricStatus.PUBLISHED ? existing.getVersion() + 1 : existing.getVersion());
-        metric.setOwner(existing.getOwner());
+        metric.setOwner(cmd.getOwner());
         metric.setCreateBy(existing.getCreateBy());
         metric.setUpdateBy(cmd.getUpdateBy());
         metric.setCreatedAt(existing.getCreatedAt());
@@ -203,7 +188,7 @@ public class MetricServiceImpl implements MetricService {
         metric.setSubjectCode(cmd.getSubjectCode());
         metric.setBizCaliber(cmd.getBizCaliber());
         metric.setTechCaliber(cmd.getTechCaliber());
-        metric.setOwner(cmd.getCreateBy());
+        metric.setOwner(cmd.getOwner());
         metric.setCreateBy(cmd.getCreateBy());
         metric.setUpdateBy(cmd.getUpdateBy());
         metric.setCompositeExt(MetricAppConvert.INSTANCE.toCompositeExt(cmd));
@@ -232,7 +217,7 @@ public class MetricServiceImpl implements MetricService {
         metric.setTechCaliber(cmd.getTechCaliber());
         metric.setStatus(existing.getStatus() == MetricStatus.PUBLISHED ? MetricStatus.DRAFT : existing.getStatus());
         metric.setVersion(existing.getStatus() == MetricStatus.PUBLISHED ? existing.getVersion() + 1 : existing.getVersion());
-        metric.setOwner(existing.getOwner());
+        metric.setOwner(cmd.getOwner());
         metric.setCreateBy(existing.getCreateBy());
         metric.setUpdateBy(cmd.getUpdateBy());
         metric.setCreatedAt(existing.getCreatedAt());
@@ -276,57 +261,20 @@ public class MetricServiceImpl implements MetricService {
     }
 
     @Override
-    public SqlTrialResultBO trialSql(SqlTrialCmd cmd) {
-        String sql = buildSql(cmd.getMetricType(), cmd.getDefinitionBody());
-        int limit = cmd.getLimit() == null ? 100 : Math.min(cmd.getLimit(), 100);
-        String limitedSql = sql + " LIMIT " + limit;
-
-        String dsName = cmd.getDefinitionBody().getDsName();
-        String dbName = cmd.getDefinitionBody().getDbName();
-        if (dsName == null || dbName == null) {
-            if (cmd.getDefinitionBody().getAtomicMetricId() != null) {
-                Metric atomic = metricRepository.findById(cmd.getDefinitionBody().getAtomicMetricId());
-                if (atomic != null && atomic.getAtomicExt() != null) {
-                    dsName = atomic.getAtomicExt().getDsName();
-                    dbName = atomic.getAtomicExt().getDbName();
-                }
-            }
-        }
-        Assert.notBlank(dsName, new BusinessException("数据源名称不能为空"));
-        Assert.notBlank(dbName, new BusinessException("数据库名称不能为空"));
-
-        SqlExecuteCmd executeCmd = new SqlExecuteCmd();
-        executeCmd.setSql(limitedSql);
-        executeCmd.setLimit(limit);
-
-        long start = System.currentTimeMillis();
-        com.cyan.arch.common.api.Response<SqlResultDTO> response = datamanDsClient.executeSql(dsName, dbName, executeCmd);
-        long cost = System.currentTimeMillis() - start;
-
-        SqlResultDTO result = response.getData();
-        SqlTrialResultBO bo = new SqlTrialResultBO();
-        bo.setSql(sql);
-        bo.setCostTime(cost);
-
-        if (result != null && result.getColumns() != null) {
-            bo.setColumns(result.getColumns().stream()
-                    .map(c -> new SqlTrialResultBO.ColumnBO().setName(c).setType("STRING"))
-                    .toList());
-        }
-        if (result != null && result.getRows() != null) {
-            List<List<Object>> rowList = new ArrayList<>();
-            for (java.util.Map<String, Object> r : result.getRows()) {
-                rowList.add(new ArrayList<>(r.values()));
-            }
-            bo.setRows(rowList);
-        }
-        return bo;
-    }
-
-    @Override
     public Page<MetricBO> dictionaryPage(MetricPageQuery query, String currentUser) {
-        com.cyan.arch.common.api.Page<Metric> page = metricRepository.page(query);
         List<String> favoriteIds = favoriteRepository.findFavoriteMetricIds(currentUser);
+        com.cyan.arch.common.api.Page<Metric> page;
+
+        if (query.getFavorite() != null && query.getFavorite()) {
+            // 只看收藏
+            if (favoriteIds.isEmpty()) {
+                return new Page<>(List.of(), 1, query.size(), 0);
+            }
+            page = metricRepository.pageByIds(favoriteIds, query);
+        } else {
+            page = metricRepository.page(query);
+        }
+
         Set<String> favSet = new HashSet<>(favoriteIds);
         List<MetricBO> list = page.getData().stream()
                 .map(m -> {

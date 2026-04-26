@@ -70,10 +70,6 @@ public interface MetricService {
      */
     String previewSql(SqlPreviewCmd cmd);
 
-    /**
-     * SQL试算
-     */
-    SqlTrialResultBO trialSql(SqlTrialCmd cmd);
 
     /**
      * 指标字典分页

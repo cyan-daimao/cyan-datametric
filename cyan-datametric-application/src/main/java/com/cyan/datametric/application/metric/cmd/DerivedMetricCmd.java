@@ -59,6 +59,11 @@ public class DerivedMetricCmd {
     private String subjectCode;
 
     /**
+     * 负责人
+     */
+    private String owner;
+
+    /**
      * 创建人
      */
     private String createBy;

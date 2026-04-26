@@ -42,6 +42,11 @@ public class MetricPageQuery implements Pageable {
      */
     private String status;
 
+    /**
+     * 只看收藏
+     */
+    private Boolean favorite;
+
     @Override
     public long current() {
         return pageNum;

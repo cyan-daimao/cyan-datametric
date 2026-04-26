@@ -25,6 +25,11 @@ public interface MetricRepository {
     Page<Metric> page(MetricPageQuery query);
 
     /**
+     * 按ID列表分页查询
+     */
+    Page<Metric> pageByIds(List<String> ids, MetricPageQuery query);
+
+    /**
      * 根据名称查询
      */
     Metric findByName(String metricName);

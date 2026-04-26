@@ -1,7 +1,6 @@
 package com.cyan.datametric.application.config;
 
 import com.cyan.arch.common.api.Page;
-// import com.cyan.arch.common.api.Response;
 import com.cyan.datametric.application.config.bo.DimensionBO;
 import com.cyan.datametric.application.config.cmd.DimensionCmd;
 import com.cyan.datametric.application.config.convert.ConfigAppConvert;
@@ -10,8 +9,7 @@ import com.cyan.datametric.domain.config.query.DimensionPageQuery;
 import com.cyan.datametric.domain.config.repository.DimensionRepository;
 import com.cyan.datametric.domain.metric.dimension.category.DimensionCategory;
 import com.cyan.datametric.domain.metric.dimension.category.repository.DimensionCategoryRepository;
-import com.cyan.dataman.client.DatamanTableClient;
-// import com.cyan.dataman.client.dto.MetadataTableDTO;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -23,19 +21,12 @@ import java.util.List;
  * @since 1.0.0
  */
 @Service
+@RequiredArgsConstructor
 public class DimensionService {
 
     private final DimensionRepository dimensionRepository;
     private final DimensionCategoryRepository dimensionCategoryRepository;
-    private final DatamanTableClient datamanTableClient;
 
-    public DimensionService(DimensionRepository dimensionRepository,
-                            DimensionCategoryRepository dimensionCategoryRepository,
-                            DatamanTableClient datamanTableClient) {
-        this.dimensionRepository = dimensionRepository;
-        this.dimensionCategoryRepository = dimensionCategoryRepository;
-        this.datamanTableClient = datamanTableClient;
-    }
 
     public DimensionBO create(DimensionCmd cmd) {
         if (cmd.getDimCode() == null || cmd.getDimCode().isBlank()) {
