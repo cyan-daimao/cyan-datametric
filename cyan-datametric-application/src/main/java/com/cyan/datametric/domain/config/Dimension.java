@@ -69,6 +69,11 @@ public class Dimension {
     private String columnName;
 
     /**
+     * 显示字段名（BI展示用）
+     */
+    private String displayColumn;
+
+    /**
      * 描述
      */
     private String description;

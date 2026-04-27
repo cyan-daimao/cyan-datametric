@@ -26,6 +26,7 @@ public class DimensionDTO {
     private String categoryName;
     private String tableName;
     private String columnName;
+    private String displayColumn;
     private String description;
     private LocalDateTime updatedAt;
 }
