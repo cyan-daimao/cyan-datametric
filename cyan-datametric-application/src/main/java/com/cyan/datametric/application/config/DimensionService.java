@@ -40,8 +40,10 @@ public class DimensionService {
     }
 
     public DimensionBO update(String id, DimensionCmd cmd) {
+        Dimension existing = dimensionRepository.findById(id);
         Dimension dimension = ConfigAppConvert.INSTANCE.toDimension(cmd);
         dimension.setId(id);
+        dimension.setDimCode(existing.getDimCode());
         dimension = dimension.update(dimensionRepository);
         DimensionBO bo = ConfigAppConvert.INSTANCE.toDimensionBO(dimension);
         assembleCategoryName(bo);

@@ -79,6 +79,12 @@ public class MetricDimensionDO {
     private String columnName;
 
     /**
+     * 显示字段名（BI展示用）
+     */
+    @TableField("display_column")
+    private String displayColumn;
+
+    /**
      * 描述
      */
     @TableField("description")

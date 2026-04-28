@@ -117,6 +117,7 @@ CREATE TABLE IF NOT EXISTS metric_dimension (
     category_id BIGINT COMMENT '维度分类ID',
     table_name VARCHAR(128) COMMENT '关联数仓维表名',
     column_name VARCHAR(128) COMMENT '关联维表字段名',
+    display_column VARCHAR(128) COMMENT '显示字段名（BI展示用）',
     description VARCHAR(512) COMMENT '描述',
     create_by VARCHAR(64) COMMENT '创建人',
     update_by VARCHAR(64) COMMENT '修改人',

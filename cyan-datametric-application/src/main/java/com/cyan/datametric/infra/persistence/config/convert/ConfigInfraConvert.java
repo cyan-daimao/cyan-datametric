@@ -91,6 +91,7 @@ public interface ConfigInfraConvert {
         d.setCategoryId(dimensionDO.getCategoryId() == null ? null : String.valueOf(dimensionDO.getCategoryId()));
         d.setTableName(dimensionDO.getTableName());
         d.setColumnName(dimensionDO.getColumnName());
+        d.setDisplayColumn(dimensionDO.getDisplayColumn());
         d.setDescription(dimensionDO.getDescription());
         d.setCreateBy(dimensionDO.getCreateBy());
         d.setUpdateBy(dimensionDO.getUpdateBy());
@@ -113,6 +114,7 @@ public interface ConfigInfraConvert {
         d.setCategoryId(dimension.getCategoryId() == null ? null : Long.parseLong(dimension.getCategoryId()));
         d.setTableName(dimension.getTableName());
         d.setColumnName(dimension.getColumnName());
+        d.setDisplayColumn(dimension.getDisplayColumn());
         d.setDescription(dimension.getDescription());
         d.setCreateBy(dimension.getCreateBy());
         d.setUpdateBy(dimension.getUpdateBy());
