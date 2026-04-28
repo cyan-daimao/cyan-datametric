@@ -89,7 +89,7 @@ public class MetricSubject {
      * 计算层级
      */
     private void calculateLevel(MetricSubjectRepository repository) {
-        if (this.parentId == null || this.parentId.isBlank()) {
+        if (this.parentId == null || this.parentId.isBlank() || "0".equals(this.parentId)) {
             this.level = 1;
             this.parentId = null;
         } else {
@@ -107,6 +107,8 @@ public class MetricSubject {
     public MetricSubject save(MetricSubjectRepository repository) {
         validate();
         Assert.isBlank(this.id, new BusinessException("新增时ID必须为空"));
+        MetricSubject exist = repository.findBySubjectCode(this.subjectCode);
+        Assert.isNull(exist, new BusinessException("主题域编码已存在"));
         calculateLevel(repository);
         this.createdAt = LocalDateTime.now();
         this.updatedAt = LocalDateTime.now();
@@ -119,6 +121,10 @@ public class MetricSubject {
     public MetricSubject update(MetricSubjectRepository repository) {
         validate();
         Assert.notBlank(this.id, new BusinessException("ID不能为空"));
+        MetricSubject exist = repository.findBySubjectCode(this.subjectCode);
+        if (exist != null && !this.id.equals(exist.getId())) {
+            throw new BusinessException("主题域编码已存在");
+        }
         calculateLevel(repository);
         this.updatedAt = LocalDateTime.now();
         return repository.update(this);

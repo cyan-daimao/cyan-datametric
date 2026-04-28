@@ -85,10 +85,10 @@ public class MetricSubjectServiceImpl implements MetricSubjectService {
                 roots.add(bo);
             }
             List<MetricSubjectBO> children = parentMap.getOrDefault(bo.getId(), new ArrayList<>());
-            children.sort(Comparator.comparingInt(MetricSubjectBO::getSortOrder));
+            children.sort(Comparator.comparing(MetricSubjectBO::getSortOrder, Comparator.nullsLast(Comparator.naturalOrder())));
             bo.setChildren(children);
         }
-        roots.sort(Comparator.comparingInt(MetricSubjectBO::getSortOrder));
+        roots.sort(Comparator.comparing(MetricSubjectBO::getSortOrder, Comparator.nullsLast(Comparator.naturalOrder())));
         return roots;
     }
 }
