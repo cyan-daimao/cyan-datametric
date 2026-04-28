@@ -80,7 +80,11 @@ public class MetricServiceImpl implements MetricService {
             cmd.setDsName(defaultDatasource);
         }
         Metric metric = new Metric();
-        metric.setMetricCode("M" + SnowflakeIdUtil.nextId());
+        if (org.springframework.util.StringUtils.hasText(cmd.getMetricCode())) {
+            metric.setMetricCode(cmd.getMetricCode());
+        } else {
+            metric.setMetricCode("M" + SnowflakeIdUtil.nextId());
+        }
         metric.setMetricName(cmd.getMetricName());
         metric.setMetricType(MetricType.ATOMIC);
         metric.setSubjectCode(cmd.getSubjectCode());
@@ -131,7 +135,11 @@ public class MetricServiceImpl implements MetricService {
     public MetricBO createDerived(DerivedMetricCmd cmd) {
         checkNameDuplicate(cmd.getMetricName());
         Metric metric = new Metric();
-        metric.setMetricCode("M" + SnowflakeIdUtil.nextId());
+        if (org.springframework.util.StringUtils.hasText(cmd.getMetricCode())) {
+            metric.setMetricCode(cmd.getMetricCode());
+        } else {
+            metric.setMetricCode("M" + SnowflakeIdUtil.nextId());
+        }
         metric.setMetricName(cmd.getMetricName());
         metric.setMetricType(MetricType.DERIVED);
         metric.setSubjectCode(cmd.getSubjectCode());
@@ -182,7 +190,11 @@ public class MetricServiceImpl implements MetricService {
     public MetricBO createComposite(CompositeMetricCmd cmd) {
         checkNameDuplicate(cmd.getMetricName());
         Metric metric = new Metric();
-        metric.setMetricCode("M" + SnowflakeIdUtil.nextId());
+        if (org.springframework.util.StringUtils.hasText(cmd.getMetricCode())) {
+            metric.setMetricCode(cmd.getMetricCode());
+        } else {
+            metric.setMetricCode("M" + SnowflakeIdUtil.nextId());
+        }
         metric.setMetricName(cmd.getMetricName());
         metric.setMetricType(MetricType.COMPOSITE);
         metric.setSubjectCode(cmd.getSubjectCode());

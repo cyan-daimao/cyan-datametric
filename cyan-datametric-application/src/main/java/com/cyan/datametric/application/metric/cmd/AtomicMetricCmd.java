@@ -19,6 +19,11 @@ public class AtomicMetricCmd {
     private String metricName;
 
     /**
+     * 指标编码
+     */
+    private String metricCode;
+
+    /**
      * 业务口径
      */
     private String bizCaliber;
