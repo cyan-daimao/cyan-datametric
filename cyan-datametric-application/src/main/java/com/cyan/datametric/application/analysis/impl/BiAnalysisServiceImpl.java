@@ -10,6 +10,8 @@ import com.cyan.datametric.domain.config.repository.DimensionRepository;
 import com.cyan.datametric.domain.metric.Metric;
 import com.cyan.datametric.domain.metric.MetricAtomicExt;
 import com.cyan.datametric.domain.metric.repository.MetricRepository;
+import com.cyan.dataman.client.table.TableRelationClient;
+import com.cyan.dataman.client.table.dto.TableRelationDTO;
 import com.cyan.datagateway.client.SqlGatewayClient;
 import com.cyan.datagateway.client.cmd.SqlExecuteCmd;
 import com.cyan.datagateway.client.dto.SqlExecuteResultDTO;
@@ -34,6 +36,7 @@ public class BiAnalysisServiceImpl implements BiAnalysisService {
     private final MetricRepository metricRepository;
     private final DimensionRepository dimensionRepository;
     private final SqlGatewayClient sqlGatewayClient;
+    private final TableRelationClient tableRelationClient;
 
     @Override
     public MetricBiChartDataDTO execute(MetricBiAnalysisCmd cmd, String executor) {
@@ -91,11 +94,11 @@ public class BiAnalysisServiceImpl implements BiAnalysisService {
             metricInfos.add(resolveMetric(ref));
         }
 
-        // 2. 校验：所有指标必须来自同一张表（Phase 1 限制）
-        String tableRef = metricInfos.getFirst().tableRef;
+        // 2. 校验：所有指标必须来自同一张表
+        String factTableRef = metricInfos.getFirst().tableRef;
         for (MetricInfo info : metricInfos) {
-            if (!tableRef.equals(info.tableRef)) {
-                throw new BusinessException("暂不支持跨表指标组合分析，指标 '" + info.alias + "' 与其他指标不在同一张表");
+            if (!factTableRef.equals(info.tableRef)) {
+                throw new BusinessException("暂不支持多事实表关联分析");
             }
         }
 
@@ -103,10 +106,48 @@ public class BiAnalysisServiceImpl implements BiAnalysisService {
         List<DimensionInfo> dimensionInfos = new ArrayList<>();
         if (!CollectionUtils.isEmpty(cmd.getDimensions())) {
             for (MetricBiAnalysisCmd.DimensionRef ref : cmd.getDimensions()) {
-                dimensionInfos.add(resolveDimension(ref, tableRef));
+                dimensionInfos.add(resolveDimension(ref));
             }
         }
 
+        // 4. 收集需要 JOIN 的维度表
+        Set<String> dimTableRefs = new HashSet<>();
+        for (DimensionInfo dim : dimensionInfos) {
+            if (StringUtils.hasText(dim.tableName) && !factTableRef.equals(dim.tableName)) {
+                dimTableRefs.add(dim.tableName);
+            }
+        }
+
+        // 5. 单表直接生成（兼容存量）
+        if (dimTableRefs.isEmpty()) {
+            return buildSingleTableSql(metricInfos, dimensionInfos, cmd, factTableRef);
+        }
+
+        // 6. 跨表：查询 JOIN 关系
+        String[] factParts = factTableRef.split("\\.");
+        if (factParts.length != 3) {
+            throw new BusinessException("事实表格式错误，期望 catalog.schema.table，实际: " + factTableRef);
+        }
+        List<String> dimTableRefList = new ArrayList<>(dimTableRefs);
+        List<TableRelationDTO> joins = tableRelationClient.findJoinPaths(
+                factParts[0], factParts[1], factParts[2], dimTableRefList);
+
+        if (joins == null || joins.isEmpty()) {
+            DimensionInfo firstDim = dimensionInfos.stream()
+                    .filter(d -> StringUtils.hasText(d.tableName) && !factTableRef.equals(d.tableName))
+                    .findFirst()
+                    .orElse(null);
+            String dimName = firstDim != null ? firstDim.alias : "维度";
+            throw new BusinessException("维度 '" + dimName + "' 所在表与指标事实表 '" + factTableRef
+                    + "' 之间未配置关联关系，请在元数据平台的表详情页配置。");
+        }
+
+        // 7. 生成带 JOIN 的 SQL
+        return buildJoinSql(metricInfos, dimensionInfos, joins, cmd, factTableRef);
+    }
+
+    private String buildSingleTableSql(List<MetricInfo> metricInfos, List<DimensionInfo> dimensionInfos,
+                                       MetricBiAnalysisCmd cmd, String tableRef) {
         // 4. 构建 SELECT
         List<String> selectCols = new ArrayList<>();
         // 维度字段
@@ -135,7 +176,7 @@ public class BiAnalysisServiceImpl implements BiAnalysisService {
         // 用户过滤条件
         if (!CollectionUtils.isEmpty(cmd.getFilters())) {
             for (MetricBiAnalysisCmd.FilterRef filter : cmd.getFilters()) {
-                String condition = buildFilterCondition(filter, metricInfos, dimensionInfos);
+                String condition = buildFilterCondition(filter, metricInfos, dimensionInfos, null, null);
                 if (StringUtils.hasText(condition)) {
                     conditions.add(condition);
                 }
@@ -158,7 +199,7 @@ public class BiAnalysisServiceImpl implements BiAnalysisService {
         if (!CollectionUtils.isEmpty(cmd.getOrders())) {
             List<String> orderParts = new ArrayList<>();
             for (MetricBiAnalysisCmd.OrderRef order : cmd.getOrders()) {
-                String orderCol = buildOrderColumn(order, metricInfos, dimensionInfos);
+                String orderCol = buildOrderColumn(order, metricInfos, dimensionInfos, null, null);
                 if (StringUtils.hasText(orderCol)) {
                     orderParts.add(orderCol + " " + order.getDirection());
                 }
@@ -174,6 +215,133 @@ public class BiAnalysisServiceImpl implements BiAnalysisService {
         }
 
         return sql.toString();
+    }
+
+    private String buildJoinSql(List<MetricInfo> metrics, List<DimensionInfo> dimensions,
+                                List<TableRelationDTO> joins, MetricBiAnalysisCmd cmd, String factTableRef) {
+        StringBuilder sql = new StringBuilder();
+
+        // SELECT
+        sql.append("SELECT ");
+        List<String> selectItems = new ArrayList<>();
+        for (DimensionInfo dim : dimensions) {
+            if (StringUtils.hasText(dim.tableName) && !factTableRef.equals(dim.tableName)) {
+                String alias = getTableAlias(dim.tableName, joins, factTableRef);
+                selectItems.add(alias + "." + dim.columnName + " AS `" + dim.alias + "`");
+            } else {
+                selectItems.add(dim.columnName + " AS `" + dim.alias + "`");
+            }
+        }
+        for (MetricInfo metric : metrics) {
+            selectItems.add(metric.aggExpression + " AS `" + metric.alias + "`");
+        }
+        sql.append(String.join(", ", selectItems));
+
+        // FROM
+        String factAlias = "t0";
+        sql.append(" FROM ").append(factTableRef).append(" ").append(factAlias);
+
+        // JOIN
+        int aliasIndex = 1;
+        Map<String, String> aliasMap = new HashMap<>();
+        aliasMap.put(factTableRef, factAlias);
+
+        for (TableRelationDTO join : joins) {
+            String dimTable = join.getTargetCatalog() + "." + join.getTargetSchema() + "." + join.getTargetTable();
+            if (aliasMap.containsKey(dimTable)) {
+                continue;
+            }
+            String dimAlias = "t" + aliasIndex++;
+            aliasMap.put(dimTable, dimAlias);
+
+            sql.append(" ").append(join.getJoinType())
+                    .append(" JOIN ").append(dimTable).append(" ").append(dimAlias)
+                    .append(" ON ")
+                    .append(factAlias).append(".").append("`").append(join.getSourceColumn()).append("`")
+                    .append(" = ")
+                    .append(dimAlias).append(".").append("`").append(join.getTargetColumn()).append("`");
+        }
+
+        // WHERE（指标过滤 + 用户过滤）
+        Set<String> metricConditions = new LinkedHashSet<>();
+        for (MetricInfo info : metrics) {
+            if (info.filterConditions != null) {
+                metricConditions.addAll(info.filterConditions);
+            }
+        }
+        List<String> conditions = new ArrayList<>(metricConditions);
+
+        if (!CollectionUtils.isEmpty(cmd.getFilters())) {
+            for (MetricBiAnalysisCmd.FilterRef filter : cmd.getFilters()) {
+                String condition = buildFilterCondition(filter, metrics, dimensions, factTableRef, aliasMap);
+                if (StringUtils.hasText(condition)) {
+                    conditions.add(condition);
+                }
+            }
+        }
+
+        if (!conditions.isEmpty()) {
+            sql.append(" WHERE ").append(String.join(" AND ", conditions));
+        }
+
+        // GROUP BY
+        if (!dimensions.isEmpty()) {
+            List<String> groupByCols = new ArrayList<>();
+            for (DimensionInfo dim : dimensions) {
+                if (StringUtils.hasText(dim.tableName) && !factTableRef.equals(dim.tableName)) {
+                    String alias = aliasMap.get(dim.tableName);
+                    if (StringUtils.hasText(alias)) {
+                        groupByCols.add(alias + "." + dim.columnName);
+                    } else {
+                        groupByCols.add(dim.columnName);
+                    }
+                } else {
+                    groupByCols.add(dim.columnName);
+                }
+            }
+            sql.append(" GROUP BY ").append(String.join(", ", groupByCols));
+        }
+
+        // ORDER BY
+        if (!CollectionUtils.isEmpty(cmd.getOrders())) {
+            List<String> orderParts = new ArrayList<>();
+            for (MetricBiAnalysisCmd.OrderRef order : cmd.getOrders()) {
+                String orderCol = buildOrderColumn(order, metrics, dimensions, factTableRef, aliasMap);
+                if (StringUtils.hasText(orderCol)) {
+                    orderParts.add(orderCol + " " + order.getDirection());
+                }
+            }
+            if (!orderParts.isEmpty()) {
+                sql.append(" ORDER BY ").append(String.join(", ", orderParts));
+            }
+        }
+
+        // LIMIT
+        if (cmd.getLimitValue() != null && cmd.getLimitValue() > 0) {
+            sql.append(" LIMIT ").append(cmd.getLimitValue());
+        }
+
+        return sql.toString();
+    }
+
+    private String getTableAlias(String tableName, List<TableRelationDTO> joins, String factTableRef) {
+        if (factTableRef.equals(tableName)) {
+            return "t0";
+        }
+        int index = 1;
+        Set<String> seen = new HashSet<>();
+        for (TableRelationDTO join : joins) {
+            String dimTable = join.getTargetCatalog() + "." + join.getTargetSchema() + "." + join.getTargetTable();
+            if (seen.contains(dimTable)) {
+                continue;
+            }
+            seen.add(dimTable);
+            if (dimTable.equals(tableName)) {
+                return "t" + index;
+            }
+            index++;
+        }
+        return "";
     }
 
     // ==================== 指标解析 ====================
@@ -240,7 +408,7 @@ public class BiAnalysisServiceImpl implements BiAnalysisService {
 
     // ==================== 维度解析 ====================
 
-    private DimensionInfo resolveDimension(MetricBiAnalysisCmd.DimensionRef ref, String metricTableRef) {
+    private DimensionInfo resolveDimension(MetricBiAnalysisCmd.DimensionRef ref) {
         String dimCode = ref.getDimCode();
         if (!StringUtils.hasText(dimCode)) {
             throw new BusinessException("维度编码不能为空");
@@ -252,16 +420,12 @@ public class BiAnalysisServiceImpl implements BiAnalysisService {
         if (!StringUtils.hasText(dim.getColumnName())) {
             throw new BusinessException("维度 '" + dimCode + "' 未配置关联字段");
         }
-        // 校验维度表与指标表是否一致（暂不支持跨表分析）
-        if (StringUtils.hasText(dim.getTableName()) && !metricTableRef.equals(dim.getTableName())) {
-            throw new BusinessException("维度 '" + dim.getDimName() + "' 关联的表是 '" + dim.getTableName()
-                    + "'，与指标表 '" + metricTableRef + "' 不同，暂不支持跨表分析。"
-                    + "请确保所选维度与指标来自同一张表，或在维度配置中调整关联表。");
-        }
+
         DimensionInfo info = new DimensionInfo();
         info.dimCode = dimCode;
         info.columnName = "`" + dim.getColumnName() + "`";
         info.alias = StringUtils.hasText(ref.getAlias()) ? ref.getAlias() : dim.getDimName();
+        info.tableName = dim.getTableName();
         return info;
     }
 
@@ -269,7 +433,9 @@ public class BiAnalysisServiceImpl implements BiAnalysisService {
 
     private String buildFilterCondition(MetricBiAnalysisCmd.FilterRef filter,
                                         List<MetricInfo> metricInfos,
-                                        List<DimensionInfo> dimensionInfos) {
+                                        List<DimensionInfo> dimensionInfos,
+                                        String factTableRef,
+                                        Map<String, String> aliasMap) {
         String operator = filter.getOperator();
         List<String> values = filter.getValues();
         if (values == null || values.isEmpty()) {
@@ -290,6 +456,14 @@ public class BiAnalysisServiceImpl implements BiAnalysisService {
             for (DimensionInfo dim : dimensionInfos) {
                 if (filter.getDimCode().equals(dim.dimCode)) {
                     column = dim.columnName;
+                    // 跨表时添加别名
+                    if (StringUtils.hasText(factTableRef) && aliasMap != null
+                            && StringUtils.hasText(dim.tableName) && !factTableRef.equals(dim.tableName)) {
+                        String alias = aliasMap.get(dim.tableName);
+                        if (StringUtils.hasText(alias)) {
+                            column = alias + "." + column;
+                        }
+                    }
                     break;
                 }
             }
@@ -341,7 +515,9 @@ public class BiAnalysisServiceImpl implements BiAnalysisService {
 
     private String buildOrderColumn(MetricBiAnalysisCmd.OrderRef order,
                                     List<MetricInfo> metricInfos,
-                                    List<DimensionInfo> dimensionInfos) {
+                                    List<DimensionInfo> dimensionInfos,
+                                    String factTableRef,
+                                    Map<String, String> aliasMap) {
         if (StringUtils.hasText(order.getMetricCode())) {
             for (MetricInfo info : metricInfos) {
                 if (order.getMetricCode().equals(info.metricCode)) {
@@ -351,7 +527,16 @@ public class BiAnalysisServiceImpl implements BiAnalysisService {
         } else if (StringUtils.hasText(order.getDimCode())) {
             for (DimensionInfo dim : dimensionInfos) {
                 if (order.getDimCode().equals(dim.dimCode)) {
-                    return dim.columnName;
+                    String col = dim.columnName;
+                    // 跨表时添加别名
+                    if (StringUtils.hasText(factTableRef) && aliasMap != null
+                            && StringUtils.hasText(dim.tableName) && !factTableRef.equals(dim.tableName)) {
+                        String alias = aliasMap.get(dim.tableName);
+                        if (StringUtils.hasText(alias)) {
+                            col = alias + "." + col;
+                        }
+                    }
+                    return col;
                 }
             }
         }
@@ -372,5 +557,6 @@ public class BiAnalysisServiceImpl implements BiAnalysisService {
         String dimCode;
         String columnName;
         String alias;
+        String tableName;
     }
 }
