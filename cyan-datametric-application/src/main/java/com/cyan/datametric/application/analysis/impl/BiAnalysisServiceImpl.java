@@ -103,7 +103,7 @@ public class BiAnalysisServiceImpl implements BiAnalysisService {
         List<DimensionInfo> dimensionInfos = new ArrayList<>();
         if (!CollectionUtils.isEmpty(cmd.getDimensions())) {
             for (MetricBiAnalysisCmd.DimensionRef ref : cmd.getDimensions()) {
-                dimensionInfos.add(resolveDimension(ref));
+                dimensionInfos.add(resolveDimension(ref, tableRef));
             }
         }
 
@@ -240,7 +240,7 @@ public class BiAnalysisServiceImpl implements BiAnalysisService {
 
     // ==================== 维度解析 ====================
 
-    private DimensionInfo resolveDimension(MetricBiAnalysisCmd.DimensionRef ref) {
+    private DimensionInfo resolveDimension(MetricBiAnalysisCmd.DimensionRef ref, String metricTableRef) {
         String dimCode = ref.getDimCode();
         if (!StringUtils.hasText(dimCode)) {
             throw new BusinessException("维度编码不能为空");
@@ -251,6 +251,12 @@ public class BiAnalysisServiceImpl implements BiAnalysisService {
         }
         if (!StringUtils.hasText(dim.getColumnName())) {
             throw new BusinessException("维度 '" + dimCode + "' 未配置关联字段");
+        }
+        // 校验维度表与指标表是否一致（暂不支持跨表分析）
+        if (StringUtils.hasText(dim.getTableName()) && !metricTableRef.equals(dim.getTableName())) {
+            throw new BusinessException("维度 '" + dim.getDimName() + "' 关联的表是 '" + dim.getTableName()
+                    + "'，与指标表 '" + metricTableRef + "' 不同，暂不支持跨表分析。"
+                    + "请确保所选维度与指标来自同一张表，或在维度配置中调整关联表。");
         }
         DimensionInfo info = new DimensionInfo();
         info.dimCode = dimCode;

@@ -46,7 +46,7 @@ public class MetricSqlBuilder {
         List<String> selectItems = new ArrayList<>();
 
         // 维度列
-        List<DimensionInfo> dimensionInfos = resolveDimensions(cmd.getDimensions());
+        List<DimensionInfo> dimensionInfos = resolveDimensions(cmd.getDimensions(), tableName);
         for (DimensionInfo dim : dimensionInfos) {
             selectItems.add(dim.getColumnExpr() + " AS `" + dim.alias() + "`");
         }
@@ -176,7 +176,7 @@ public class MetricSqlBuilder {
     /**
      * 解析维度引用为维度信息
      */
-    private List<DimensionInfo> resolveDimensions(List<MetricBiAnalysisCmd.DimensionRef> dimRefs) {
+    private List<DimensionInfo> resolveDimensions(List<MetricBiAnalysisCmd.DimensionRef> dimRefs, String tableName) {
         List<DimensionInfo> result = new ArrayList<>();
         if (dimRefs == null) {
             return result;
@@ -186,6 +186,13 @@ public class MetricSqlBuilder {
             Assert.notNull(dimension, new BusinessException(MetricBiErrorCode.DIMENSION_NOT_FOUND.getMessage()));
             String columnName = dimension.getColumnName();
             Assert.notBlank(columnName, new BusinessException("维度未配置物理字段: " + dimension.getDimName()));
+            // 校验维度表与指标表是否一致（暂不支持跨表分析）
+            if (dimension.getTableName() != null && !dimension.getTableName().isBlank()
+                    && !tableName.equals(dimension.getTableName())) {
+                throw new BusinessException("维度 '" + dimension.getDimName() + "' 关联的表是 '" + dimension.getTableName()
+                        + "'，与指标表 '" + tableName + "' 不同，暂不支持跨表分析。"
+                        + "请确保所选维度与指标来自同一张表，或在维度配置中调整关联表。");
+            }
             result.add(new DimensionInfo(
                     ref.getDimId(),
                     ref.getAlias() != null && !ref.getAlias().isBlank() ? ref.getAlias() : dimension.getDimName(),
