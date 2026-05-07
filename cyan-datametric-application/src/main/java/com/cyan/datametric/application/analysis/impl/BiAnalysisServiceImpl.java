@@ -16,6 +16,7 @@ import com.cyan.datagateway.client.SqlGatewayClient;
 import com.cyan.datagateway.client.cmd.SqlExecuteCmd;
 import com.cyan.datagateway.client.dto.SqlExecuteResultDTO;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.util.CollectionUtils;
 import org.springframework.util.StringUtils;
@@ -37,6 +38,9 @@ public class BiAnalysisServiceImpl implements BiAnalysisService {
     private final DimensionRepository dimensionRepository;
     private final SqlGatewayClient sqlGatewayClient;
     private final TableRelationClient tableRelationClient;
+
+    @Value("${cyan.datametric.default-catalog:iceberg}")
+    private String defaultCatalog;
 
     @Override
     public MetricBiChartDataDTO execute(MetricBiAnalysisCmd cmd, String executor) {
@@ -125,9 +129,6 @@ public class BiAnalysisServiceImpl implements BiAnalysisService {
 
         // 6. 跨表：查询 JOIN 关系
         String[] factParts = factTableRef.split("\\.");
-        if (factParts.length != 3) {
-            throw new BusinessException("事实表格式错误，期望 catalog.schema.table，实际: " + factTableRef);
-        }
         List<String> dimTableRefList = new ArrayList<>(dimTableRefs);
         List<TableRelationDTO> joins = tableRelationClient.findJoinPaths(
                 factParts[0], factParts[1], factParts[2], dimTableRefList);
@@ -366,7 +367,7 @@ public class BiAnalysisServiceImpl implements BiAnalysisService {
                     throw new BusinessException("原子指标 '" + metricCode + "' 扩展信息不存在");
                 }
                 MetricAtomicExt ext = metric.getAtomicExt();
-                info.tableRef = ext.getDbName() + "." + ext.getTblName();
+                info.tableRef = normalizeTableRef(ext.getDbName() + "." + ext.getTblName());
                 info.aggExpression = buildAggExpression(ext.getStatFunc().getCode(), ext.getColName());
                 info.filterConditions = buildFilterConditions(ext.getFilterCondition());
             }
@@ -379,7 +380,7 @@ public class BiAnalysisServiceImpl implements BiAnalysisService {
                     throw new BusinessException("派生指标 '" + metricCode + "' 关联的原子指标不存在");
                 }
                 MetricAtomicExt ext = atomic.getAtomicExt();
-                info.tableRef = ext.getDbName() + "." + ext.getTblName();
+                info.tableRef = normalizeTableRef(ext.getDbName() + "." + ext.getTblName());
                 info.aggExpression = buildAggExpression(ext.getStatFunc().getCode(), ext.getColName());
                 info.filterConditions = buildFilterConditions(ext.getFilterCondition());
             }
@@ -425,7 +426,7 @@ public class BiAnalysisServiceImpl implements BiAnalysisService {
         info.dimCode = dimCode;
         info.columnName = "`" + dim.getColumnName() + "`";
         info.alias = StringUtils.hasText(ref.getAlias()) ? ref.getAlias() : dim.getDimName();
-        info.tableName = dim.getTableName();
+        info.tableName = normalizeTableRef(dim.getTableName());
         return info;
     }
 
@@ -551,6 +552,17 @@ public class BiAnalysisServiceImpl implements BiAnalysisService {
         String tableRef;
         String aggExpression;
         List<String> filterConditions;
+    }
+
+    private String normalizeTableRef(String tableRef) {
+        if (!StringUtils.hasText(tableRef)) {
+            return tableRef;
+        }
+        String[] parts = tableRef.split("\\.");
+        if (parts.length == 2) {
+            return defaultCatalog + "." + tableRef;
+        }
+        return tableRef;
     }
 
     private static class DimensionInfo {
