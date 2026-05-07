@@ -1,6 +1,6 @@
 package com.cyan.datametric.infra.persistence.semantic.repository;
 
-import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.cyan.datametric.domain.semantic.QueryPlan;
 import com.cyan.datametric.domain.semantic.repository.QueryPlanRepository;
 import org.springframework.stereotype.Repository;

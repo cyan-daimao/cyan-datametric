@@ -1,8 +1,7 @@
 package com.cyan.datametric.infra.persistence.semantic.repository;
 
-import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
-import com.cyan.arch.common.api.Page;
 import com.cyan.datametric.domain.semantic.SemanticMetric;
 import com.cyan.datametric.domain.semantic.repository.SemanticMetricRepository;
 import com.cyan.datametric.infra.persistence.semantic.convert.SemanticInfraConvert;
@@ -13,7 +12,6 @@ import org.springframework.stereotype.Repository;
 
 import java.util.List;
 import java.util.Optional;
-import java.util.stream.Collectors;
 
 /**
  * 语义指标仓储实现
@@ -37,15 +35,15 @@ public class SemanticMetricRepositoryImpl implements SemanticMetricRepository {
 
     @Override
     public SemanticMetric findByMetricCode(String metricCode) {
-        LambdaQueryWrapper<SemanticMetricDO> wrapper = new LambdaQueryWrapper<>()
-                .eq(SemanticMetricDO::getMetricCode, metricCode);
+        QueryWrapper<SemanticMetricDO> wrapper = new QueryWrapper<SemanticMetricDO>()
+                .eq("metric_code", metricCode);
         return SemanticInfraConvert.INSTANCE.toSemanticMetric(mapper.selectOne(wrapper));
     }
 
     @Override
     public List<SemanticMetric> findByMetricCodes(List<String> metricCodes) {
-        LambdaQueryWrapper<SemanticMetricDO> wrapper = new LambdaQueryWrapper<>()
-                .in(SemanticMetricDO::getMetricCode, metricCodes);
+        QueryWrapper<SemanticMetricDO> wrapper = new QueryWrapper<SemanticMetricDO>()
+                .in("metric_code", metricCodes);
         return mapper.selectList(wrapper).stream()
                 .map(SemanticInfraConvert.INSTANCE::toSemanticMetric)
                 .toList();
@@ -53,23 +51,23 @@ public class SemanticMetricRepositoryImpl implements SemanticMetricRepository {
 
     @Override
     public List<SemanticMetric> findBySourceTableId(String sourceTableId) {
-        LambdaQueryWrapper<SemanticMetricDO> wrapper = new LambdaQueryWrapper<>()
-                .eq(SemanticMetricDO::getSourceTableId, Long.parseLong(sourceTableId));
+        QueryWrapper<SemanticMetricDO> wrapper = new QueryWrapper<SemanticMetricDO>()
+                .eq("source_table_id", Long.parseLong(sourceTableId));
         return mapper.selectList(wrapper).stream()
                 .map(SemanticInfraConvert.INSTANCE::toSemanticMetric)
                 .toList();
     }
 
     @Override
-    public Page<SemanticMetric> page(int pageNum, int pageSize) {
+    public com.cyan.arch.common.api.Page<SemanticMetric> page(int pageNum, int pageSize) {
         Page<SemanticMetricDO> page = new Page<>(pageNum, pageSize);
-        LambdaQueryWrapper<SemanticMetricDO> wrapper = new LambdaQueryWrapper<>()
-                .orderByDesc(SemanticMetricDO::getUpdatedAt);
+        QueryWrapper<SemanticMetricDO> wrapper = new QueryWrapper<SemanticMetricDO>()
+                .orderByDesc("updated_at");
         Page<SemanticMetricDO> result = mapper.selectPage(page, wrapper);
         List<SemanticMetric> list = Optional.ofNullable(result.getRecords()).orElse(List.of()).stream()
                 .map(SemanticInfraConvert.INSTANCE::toSemanticMetric)
                 .toList();
-        return new Page<>(list, result.getCurrent(), result.getSize(), result.getTotal());
+        return new com.cyan.arch.common.api.Page<>(list, result.getCurrent(), result.getSize(), result.getTotal());
     }
 
     @Override

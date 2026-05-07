@@ -16,7 +16,9 @@ import com.cyan.datametric.domain.semantic.QueryPlan;
 import com.cyan.datametric.domain.semantic.SemanticMetric;
 import com.cyan.datametric.domain.semantic.repository.*;
 import com.cyan.datametric.enums.semantic.RouteType;
+import lombok.Data;
 import lombok.RequiredArgsConstructor;
+import lombok.experimental.Accessors;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.util.CollectionUtils;
@@ -247,8 +249,8 @@ public class SemanticQueryEngine {
 
     // ==================== 查询命令与结果 ====================
 
-    @lombok.Data
-    @lombok.Accessors(chain = true)
+    @Data
+    @Accessors(chain = true)
     public static class SemanticQueryCmd {
         private List<String> metricCodes;
         private List<DimensionRef> dimensions;
@@ -257,8 +259,8 @@ public class SemanticQueryEngine {
         private Integer limit;
     }
 
-    @lombok.Data
-    @lombok.Accessors(chain = true)
+    @Data
+    @Accessors(chain = true)
     public static class SemanticQueryResult {
         private String status;
         private String sql;

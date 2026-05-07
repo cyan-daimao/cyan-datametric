@@ -71,7 +71,7 @@ public class QueryRouter {
                 continue;
             }
             RollupCheckResult rollup = checkRollupMatch(metricSet, dimSet, mv);
-            if (rollup.isMatch()) {
+            if (rollup.match()) {
                 log.info("上卷匹配到物化视图: mvId={}, name={}", mv.getId(), mv.getName());
                 String rewrittenSql = buildRollupSql(mv, dimensions, rollup);
                 return new RouteDecision(true, mv.getId(), rewrittenSql, "ROLLUP");
@@ -151,7 +151,7 @@ public class QueryRouter {
         // 查询维度（可能需要上卷函数）
         List<String> selectItems = new ArrayList<>();
         for (String dim : queryDimensions) {
-            if (dim.toLowerCase().contains("week") && rollup.hasTimeRollup) {
+            if (dim.toLowerCase().contains("week") && rollup.hasTimeRollup()) {
                 selectItems.add("WEEK(dt) AS " + dim);
             } else {
                 selectItems.add(dim);

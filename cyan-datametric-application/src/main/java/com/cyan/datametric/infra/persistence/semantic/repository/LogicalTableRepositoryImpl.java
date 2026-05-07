@@ -1,11 +1,9 @@
 package com.cyan.datametric.infra.persistence.semantic.repository;
 
-import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
-import com.cyan.arch.common.api.Page;
 import com.cyan.datametric.domain.semantic.LogicalTable;
 import com.cyan.datametric.domain.semantic.repository.LogicalTableRepository;
-import com.cyan.datametric.enums.semantic.TableType;
 import com.cyan.datametric.infra.persistence.semantic.convert.SemanticInfraConvert;
 import com.cyan.datametric.infra.persistence.semantic.dos.SemanticLogicalTableDO;
 import com.cyan.datametric.infra.persistence.semantic.mappers.SemanticLogicalTableMapper;
@@ -14,7 +12,6 @@ import org.springframework.stereotype.Repository;
 
 import java.util.List;
 import java.util.Optional;
-import java.util.stream.Collectors;
 
 /**
  * 逻辑表仓储实现
@@ -39,35 +36,35 @@ public class LogicalTableRepositoryImpl implements LogicalTableRepository {
 
     @Override
     public LogicalTable findByTableName(String tableName) {
-        LambdaQueryWrapper<SemanticLogicalTableDO> wrapper = new LambdaQueryWrapper<>()
-                .eq(SemanticLogicalTableDO::getTableName, tableName);
+        QueryWrapper<SemanticLogicalTableDO> wrapper = new QueryWrapper<SemanticLogicalTableDO>()
+                .eq("table_name", tableName);
         SemanticLogicalTableDO d = mapper.selectOne(wrapper);
         return SemanticInfraConvert.INSTANCE.toLogicalTable(d);
     }
 
     @Override
-    public Page<LogicalTable> page(int pageNum, int pageSize) {
+    public com.cyan.arch.common.api.Page<LogicalTable> page(int pageNum, int pageSize) {
         Page<SemanticLogicalTableDO> page = new Page<>(pageNum, pageSize);
-        LambdaQueryWrapper<SemanticLogicalTableDO> wrapper = new LambdaQueryWrapper<>()
-                .orderByDesc(SemanticLogicalTableDO::getUpdatedAt);
+        QueryWrapper<SemanticLogicalTableDO> wrapper = new QueryWrapper<SemanticLogicalTableDO>()
+                .orderByDesc("updated_at");
         Page<SemanticLogicalTableDO> result = mapper.selectPage(page, wrapper);
         List<LogicalTable> list = Optional.ofNullable(result.getRecords()).orElse(List.of()).stream()
                 .map(SemanticInfraConvert.INSTANCE::toLogicalTable)
                 .toList();
-        return new Page<>(list, result.getCurrent(), result.getSize(), result.getTotal());
+        return new com.cyan.arch.common.api.Page<>(list, result.getCurrent(), result.getSize(), result.getTotal());
     }
 
     @Override
     public List<LogicalTable> findAll() {
-        return mapper.selectList(new LambdaQueryWrapper<>()).stream()
+        return mapper.selectList(new QueryWrapper<SemanticLogicalTableDO>()).stream()
                 .map(SemanticInfraConvert.INSTANCE::toLogicalTable)
                 .toList();
     }
 
     @Override
     public List<LogicalTable> findByTableType(String tableType) {
-        LambdaQueryWrapper<SemanticLogicalTableDO> wrapper = new LambdaQueryWrapper<>()
-                .eq(SemanticLogicalTableDO::getTableType, tableType);
+        QueryWrapper<SemanticLogicalTableDO> wrapper = new QueryWrapper<SemanticLogicalTableDO>()
+                .eq("table_type", tableType);
         return mapper.selectList(wrapper).stream()
                 .map(SemanticInfraConvert.INSTANCE::toLogicalTable)
                 .toList();

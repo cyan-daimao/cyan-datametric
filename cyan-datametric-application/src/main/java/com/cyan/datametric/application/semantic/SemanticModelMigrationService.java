@@ -13,7 +13,9 @@ import com.cyan.datametric.domain.semantic.repository.LogicalTableRepository;
 import com.cyan.datametric.domain.semantic.repository.TableRelationshipRepository;
 import com.cyan.datametric.enums.semantic.JoinType;
 import com.cyan.datametric.enums.semantic.TableType;
+import lombok.Data;
 import lombok.RequiredArgsConstructor;
+import lombok.experimental.Accessors;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
@@ -219,8 +221,8 @@ public class SemanticModelMigrationService {
 
     // ==================== 迁移报告 ====================
 
-    @lombok.Data
-    @lombok.Accessors(chain = true)
+    @Data
+    @Accessors(chain = true)
     public static class MigrationReport {
         private int dimTables = 0;
         private int factTables = 0;

@@ -6,6 +6,8 @@ import com.cyan.datametric.application.semantic.JoinPathResolver.JoinEdge;
 import com.cyan.datametric.domain.semantic.LogicalTable;
 import com.cyan.datametric.domain.semantic.SemanticMetric;
 import com.cyan.datametric.enums.MetricType;
+import lombok.Data;
+import lombok.experimental.Accessors;
 import org.springframework.stereotype.Component;
 import org.springframework.util.CollectionUtils;
 import org.springframework.util.StringUtils;
@@ -288,16 +290,16 @@ public class SemanticSqlBuilder {
 
     // ==================== 内部引用类 ====================
 
-    @lombok.Data
-    @lombok.Accessors(chain = true)
+    @Data
+    @Accessors(chain = true)
     public static class DimensionRef {
         private String tableId;
         private String columnName;
         private String alias;
     }
 
-    @lombok.Data
-    @lombok.Accessors(chain = true)
+    @Data
+    @Accessors(chain = true)
     public static class FilterRef {
         private String tableId;
         private String columnName;
@@ -305,8 +307,8 @@ public class SemanticSqlBuilder {
         private List<String> values;
     }
 
-    @lombok.Data
-    @lombok.Accessors(chain = true)
+    @Data
+    @Accessors(chain = true)
     public static class OrderRef {
         private String metricCode;
         private String tableId;

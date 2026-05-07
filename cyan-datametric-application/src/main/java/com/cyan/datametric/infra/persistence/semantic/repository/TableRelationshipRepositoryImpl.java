@@ -1,6 +1,6 @@
 package com.cyan.datametric.infra.persistence.semantic.repository;
 
-import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.cyan.datametric.domain.semantic.TableRelationship;
 import com.cyan.datametric.domain.semantic.repository.TableRelationshipRepository;
 import com.cyan.datametric.infra.persistence.semantic.convert.SemanticInfraConvert;
@@ -34,15 +34,15 @@ public class TableRelationshipRepositoryImpl implements TableRelationshipReposit
 
     @Override
     public List<TableRelationship> findAll() {
-        return mapper.selectList(new LambdaQueryWrapper<>()).stream()
+        return mapper.selectList(new QueryWrapper<SemanticTableRelationshipDO>()).stream()
                 .map(SemanticInfraConvert.INSTANCE::toTableRelationship)
                 .toList();
     }
 
     @Override
     public List<TableRelationship> findByLeftTableId(String leftTableId) {
-        LambdaQueryWrapper<SemanticTableRelationshipDO> wrapper = new LambdaQueryWrapper<>()
-                .eq(SemanticTableRelationshipDO::getLeftTableId, Long.parseLong(leftTableId));
+        QueryWrapper<SemanticTableRelationshipDO> wrapper = new QueryWrapper<SemanticTableRelationshipDO>()
+                .eq("left_table_id", Long.parseLong(leftTableId));
         return mapper.selectList(wrapper).stream()
                 .map(SemanticInfraConvert.INSTANCE::toTableRelationship)
                 .toList();
@@ -50,8 +50,8 @@ public class TableRelationshipRepositoryImpl implements TableRelationshipReposit
 
     @Override
     public List<TableRelationship> findByRightTableId(String rightTableId) {
-        LambdaQueryWrapper<SemanticTableRelationshipDO> wrapper = new LambdaQueryWrapper<>()
-                .eq(SemanticTableRelationshipDO::getRightTableId, Long.parseLong(rightTableId));
+        QueryWrapper<SemanticTableRelationshipDO> wrapper = new QueryWrapper<SemanticTableRelationshipDO>()
+                .eq("right_table_id", Long.parseLong(rightTableId));
         return mapper.selectList(wrapper).stream()
                 .map(SemanticInfraConvert.INSTANCE::toTableRelationship)
                 .toList();
@@ -60,10 +60,10 @@ public class TableRelationshipRepositoryImpl implements TableRelationshipReposit
     @Override
     public List<TableRelationship> findByTableId(String tableId) {
         Long id = Long.parseLong(tableId);
-        LambdaQueryWrapper<SemanticTableRelationshipDO> wrapper = new LambdaQueryWrapper<>()
-                .eq(SemanticTableRelationshipDO::getLeftTableId, id)
+        QueryWrapper<SemanticTableRelationshipDO> wrapper = new QueryWrapper<SemanticTableRelationshipDO>()
+                .eq("left_table_id", id)
                 .or()
-                .eq(SemanticTableRelationshipDO::getRightTableId, id);
+                .eq("right_table_id", id);
         return mapper.selectList(wrapper).stream()
                 .map(SemanticInfraConvert.INSTANCE::toTableRelationship)
                 .toList();
