@@ -426,7 +426,7 @@ public class BiAnalysisServiceImpl implements BiAnalysisService {
         info.dimCode = dimCode;
         info.columnName = "`" + dim.getColumnName() + "`";
         info.alias = StringUtils.hasText(ref.getAlias()) ? ref.getAlias() : dim.getDimName();
-        info.tableName = normalizeTableRef(dim.getTableName());
+        info.tableName = buildDimensionTableRef(dim.getSchema(), dim.getTableName());
         return info;
     }
 
@@ -552,6 +552,22 @@ public class BiAnalysisServiceImpl implements BiAnalysisService {
         String tableRef;
         String aggExpression;
         List<String> filterConditions;
+    }
+
+    private String buildDimensionTableRef(String schema, String tableName) {
+        if (!StringUtils.hasText(tableName)) {
+            return null;
+        }
+        // 如果 tableName 已经包含 schema（如 dim.dim_public_cn_province），直接使用
+        if (tableName.contains(".")) {
+            return normalizeTableRef(tableName);
+        }
+        // 只有表名，用 schema 补全
+        if (StringUtils.hasText(schema)) {
+            return normalizeTableRef(schema + "." + tableName);
+        }
+        // 既没有 schema 又没有点号，直接走 normalize（会报错提示）
+        return normalizeTableRef(tableName);
     }
 
     private String normalizeTableRef(String tableRef) {

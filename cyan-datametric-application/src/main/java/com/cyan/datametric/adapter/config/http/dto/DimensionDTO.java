@@ -24,6 +24,7 @@ public class DimensionDTO {
     private List<String> dimValues;
     private String categoryId;
     private String categoryName;
+    private String schema;
     private String tableName;
     private String columnName;
     private String displayColumn;

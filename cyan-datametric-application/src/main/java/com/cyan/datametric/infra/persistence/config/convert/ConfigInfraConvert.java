@@ -89,6 +89,7 @@ public interface ConfigInfraConvert {
             }
         }
         d.setCategoryId(dimensionDO.getCategoryId() == null ? null : String.valueOf(dimensionDO.getCategoryId()));
+        d.setSchema(dimensionDO.getSchema());
         d.setTableName(dimensionDO.getTableName());
         d.setColumnName(dimensionDO.getColumnName());
         d.setDisplayColumn(dimensionDO.getDisplayColumn());
@@ -112,6 +113,7 @@ public interface ConfigInfraConvert {
             d.setDimValues(JSON.toJSONString(dimension.getDimValues()));
         }
         d.setCategoryId(dimension.getCategoryId() == null ? null : Long.parseLong(dimension.getCategoryId()));
+        d.setSchema(dimension.getSchema());
         d.setTableName(dimension.getTableName());
         d.setColumnName(dimension.getColumnName());
         d.setDisplayColumn(dimension.getDisplayColumn());

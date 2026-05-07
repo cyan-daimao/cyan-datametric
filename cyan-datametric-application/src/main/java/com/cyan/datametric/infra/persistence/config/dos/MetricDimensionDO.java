@@ -67,6 +67,12 @@ public class MetricDimensionDO {
     private Long categoryId;
 
     /**
+     * 数仓维表所在 schema
+     */
+    @TableField("schema_name")
+    private String schema;
+
+    /**
      * 关联数仓维表名
      */
     @TableField("table_name")

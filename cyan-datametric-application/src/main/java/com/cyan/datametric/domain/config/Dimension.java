@@ -59,6 +59,11 @@ public class Dimension {
     private String categoryId;
 
     /**
+     * 数仓维表所在 schema
+     */
+    private String schema;
+
+    /**
      * 关联数仓维表名
      */
     private String tableName;
