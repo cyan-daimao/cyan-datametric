@@ -562,6 +562,10 @@ public class BiAnalysisServiceImpl implements BiAnalysisService {
         if (parts.length == 2) {
             return defaultCatalog + "." + tableRef;
         }
+        if (parts.length == 1) {
+            throw new BusinessException(
+                    "表引用格式错误，期望 schema.table 或 catalog.schema.table，实际: " + tableRef);
+        }
         return tableRef;
     }
 
