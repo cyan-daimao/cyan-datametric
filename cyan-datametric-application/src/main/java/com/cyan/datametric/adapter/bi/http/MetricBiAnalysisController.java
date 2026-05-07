@@ -3,11 +3,7 @@ package com.cyan.datametric.adapter.bi.http;
 import com.cyan.arch.common.api.Response;
 import com.cyan.datametric.adapter.bi.http.dto.BiDimensionDTO;
 import com.cyan.datametric.adapter.bi.http.dto.BiMetricDTO;
-import com.cyan.datametric.adapter.bi.http.dto.ChartDataDTO;
-import com.cyan.datametric.adapter.bi.http.dto.MetricBiAnalysisCmd;
 import com.cyan.datametric.application.bi.MetricBiAnalysisService;
-import com.cyan.employee.login.filter.UserContextHolder;
-import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 
@@ -25,27 +21,6 @@ import java.util.List;
 public class MetricBiAnalysisController {
 
     private final MetricBiAnalysisService metricBiAnalysisService;
-
-    /**
-     * 指标分析执行
-     */
-    @PostMapping("/analysis/execute")
-    // API: ready
-    public Response<ChartDataDTO> execute(@RequestBody @Valid MetricBiAnalysisCmd cmd) {
-        String executor = UserContextHolder.getCurrentEmployee().getPassport();
-        ChartDataDTO dto = metricBiAnalysisService.execute(cmd, executor);
-        return Response.success(dto);
-    }
-
-    /**
-     * 指标分析SQL预览
-     */
-    @PostMapping("/analysis/preview-sql")
-    // API: ready
-    public Response<String> previewSql(@RequestBody @Valid MetricBiAnalysisCmd cmd) {
-        String sql = metricBiAnalysisService.previewSql(cmd);
-        return Response.success(sql);
-    }
 
     /**
      * 指标列表（BI用）
