@@ -35,6 +35,11 @@ public interface MetricRepository {
     Metric findByName(String metricName);
 
     /**
+     * 根据指标编码查询
+     */
+    Metric findByMetricCode(String metricCode);
+
+    /**
      * 保存指标
      */
     Metric save(Metric metric);

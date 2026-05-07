@@ -18,6 +18,11 @@ public interface DimensionRepository {
     Dimension findById(String id);
 
     /**
+     * 根据维度编码查询
+     */
+    Dimension findByDimCode(String dimCode);
+
+    /**
      * 分页查询
      */
     Page<Dimension> page(DimensionPageQuery query);

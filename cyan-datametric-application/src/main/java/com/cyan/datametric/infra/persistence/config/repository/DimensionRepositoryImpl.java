@@ -37,6 +37,14 @@ public class DimensionRepositoryImpl implements DimensionRepository {
     }
 
     @Override
+    public Dimension findByDimCode(String dimCode) {
+        LambdaQueryWrapper<MetricDimensionDO> wrapper = new LambdaQueryWrapper<MetricDimensionDO>()
+                .eq(MetricDimensionDO::getDimCode, dimCode);
+        MetricDimensionDO dimensionDO = dimensionMapper.selectOne(wrapper);
+        return ConfigInfraConvert.INSTANCE.toDimension(dimensionDO);
+    }
+
+    @Override
     public com.cyan.arch.common.api.Page<Dimension> page(DimensionPageQuery query) {
         Page<MetricDimensionDO> page = new Page<>(query.current(), query.size());
         LambdaQueryWrapper<MetricDimensionDO> wrapper = new LambdaQueryWrapper<MetricDimensionDO>()

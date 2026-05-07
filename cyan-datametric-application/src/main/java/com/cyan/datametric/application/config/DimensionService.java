@@ -9,6 +9,7 @@ import com.cyan.datametric.domain.config.query.DimensionPageQuery;
 import com.cyan.datametric.domain.config.repository.DimensionRepository;
 import com.cyan.datametric.domain.metric.dimension.category.DimensionCategory;
 import com.cyan.datametric.domain.metric.dimension.category.repository.DimensionCategoryRepository;
+import com.cyan.datametric.infra.util.SnowflakeIdUtil;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -30,7 +31,7 @@ public class DimensionService {
 
     public DimensionBO create(DimensionCmd cmd) {
         if (cmd.getDimCode() == null || cmd.getDimCode().isBlank()) {
-            cmd.setDimCode("DIM_" + System.currentTimeMillis());
+            cmd.setDimCode("DIM" + SnowflakeIdUtil.nextId());
         }
         Dimension dimension = ConfigAppConvert.INSTANCE.toDimension(cmd);
         dimension = dimension.save(dimensionRepository);

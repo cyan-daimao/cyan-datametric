@@ -7,13 +7,24 @@ import com.cyan.datametric.adapter.metric.http.dto.*;
 import com.cyan.datametric.application.metric.MetricService;
 import com.cyan.datametric.application.metric.bo.*;
 import com.cyan.datametric.application.metric.cmd.*;
+import com.cyan.datametric.domain.config.Dimension;
+import com.cyan.datametric.domain.config.query.DimensionPageQuery;
+import com.cyan.datametric.domain.config.repository.DimensionRepository;
+import com.cyan.datametric.domain.metric.Metric;
 import com.cyan.datametric.domain.metric.query.MetricPageQuery;
+import com.cyan.datametric.domain.metric.repository.MetricRepository;
+import com.cyan.datametric.domain.metric.dimension.category.repository.DimensionCategoryRepository;
+import com.cyan.datametric.domain.metric.subject.MetricSubject;
+import com.cyan.datametric.domain.metric.subject.repository.MetricSubjectRepository;
 import com.cyan.employee.login.filter.UserContextHolder;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * 指标控制器
@@ -27,6 +38,10 @@ import java.util.List;
 public class MetricController {
 
     private final MetricService metricService;
+    private final MetricRepository metricRepository;
+    private final DimensionRepository dimensionRepository;
+    private final MetricSubjectRepository metricSubjectRepository;
+    private final DimensionCategoryRepository dimensionCategoryRepository;
 
 
     // ==================== 指标定义 ====================
@@ -163,5 +178,104 @@ public class MetricController {
             @PathVariable("version") Integer version) {
         MetricBO bo = metricService.rollback(id, version);
         return Response.success(MetricAdapterConvert.INSTANCE.toMetricDetailDTO(bo));
+    }
+
+    // ==================== BI 分析 ====================
+
+    @GetMapping("/bi/list")
+    public Response<List<MetricBiListItemDTO>> biList(
+            @RequestParam(name = "name", required = false) String name) {
+        MetricPageQuery query = new MetricPageQuery();
+        query.setStatus("PUBLISHED");
+        query.setMetricName(name);
+        query.setPageSize(9999);
+
+        com.cyan.arch.common.api.Page<Metric> page = metricRepository.page(query);
+        List<Metric> metrics = page.getData();
+
+        List<String> subjectCodes = metrics.stream()
+                .map(Metric::getSubjectCode)
+                .filter(sc -> sc != null && !sc.isBlank())
+                .distinct()
+                .toList();
+
+        Map<String, String> subjectNameMap;
+        if (!subjectCodes.isEmpty()) {
+            subjectNameMap = metricSubjectRepository.findBySubjectCodes(subjectCodes).stream()
+                    .filter(s -> s.getSubjectCode() != null)
+                    .collect(Collectors.toMap(
+                            MetricSubject::getSubjectCode, MetricSubject::getSubjectName, (a, b) -> a));
+        } else {
+            subjectNameMap = Map.of();
+        }
+
+        List<MetricBiListItemDTO> list = metrics.stream()
+                .map(m -> {
+                    MetricBiListItemDTO dto = new MetricBiListItemDTO();
+                    dto.setId(m.getId());
+                    dto.setMetricCode(m.getMetricCode());
+                    dto.setMetricName(m.getMetricName());
+                    dto.setMetricType(m.getMetricType() == null ? null : m.getMetricType().getCode());
+                    dto.setSubjectCode(m.getSubjectCode());
+                    if (m.getSubjectCode() != null) {
+                        dto.setSubjectName(subjectNameMap.get(m.getSubjectCode()));
+                    }
+                    if (m.getAtomicExt() != null && m.getAtomicExt().getStatFunc() != null) {
+                        dto.setStatFunc(m.getAtomicExt().getStatFunc().getCode());
+                    }
+                    dto.setDataType(null);
+                    dto.setDescription(m.getBizCaliber());
+                    return dto;
+                })
+                .toList();
+
+        return Response.success(list);
+    }
+
+    @GetMapping("/bi/dimensions")
+    public Response<List<DimensionBiListItemDTO>> biDimensions(
+            @RequestParam(name = "name", required = false) String name) {
+        DimensionPageQuery query = new DimensionPageQuery();
+        query.setDimName(name);
+        query.setPageSize(9999);
+
+        com.cyan.arch.common.api.Page<Dimension> page = dimensionRepository.page(query);
+        List<Dimension> dimensions = page.getData();
+
+        Set<String> categoryIds = dimensions.stream()
+                .map(Dimension::getCategoryId)
+                .filter(id -> id != null && !id.isBlank())
+                .collect(Collectors.toSet());
+
+        Map<String, String> categoryNameMap;
+        if (!categoryIds.isEmpty()) {
+            categoryNameMap = dimensionCategoryRepository.findAll().stream()
+                    .filter(c -> c.getId() != null && categoryIds.contains(c.getId()))
+                    .collect(Collectors.toMap(
+                            com.cyan.datametric.domain.metric.dimension.category.DimensionCategory::getId,
+                            com.cyan.datametric.domain.metric.dimension.category.DimensionCategory::getName,
+                            (a, b) -> a));
+        } else {
+            categoryNameMap = Map.of();
+        }
+
+        List<DimensionBiListItemDTO> list = dimensions.stream()
+                .map(d -> {
+                    DimensionBiListItemDTO dto = new DimensionBiListItemDTO();
+                    dto.setId(d.getId());
+                    dto.setDimCode(d.getDimCode());
+                    dto.setDimName(d.getDimName());
+                    dto.setDimType(d.getDimType());
+                    dto.setDataType(d.getDataType());
+                    dto.setTableName(d.getTableName());
+                    dto.setColumnName(d.getColumnName());
+                    if (d.getCategoryId() != null) {
+                        dto.setCategoryName(categoryNameMap.get(d.getCategoryId()));
+                    }
+                    return dto;
+                })
+                .toList();
+
+        return Response.success(list);
     }
 }

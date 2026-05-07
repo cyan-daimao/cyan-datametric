@@ -112,6 +112,19 @@ public class MetricRepositoryImpl implements MetricRepository {
     }
 
     @Override
+    public Metric findByMetricCode(String metricCode) {
+        LambdaQueryWrapper<MetricDefinitionDO> wrapper = new LambdaQueryWrapper<MetricDefinitionDO>()
+                .eq(MetricDefinitionDO::getMetricCode, metricCode);
+        MetricDefinitionDO def = definitionMapper.selectOne(wrapper);
+        if (def == null) {
+            return null;
+        }
+        Metric metric = MetricInfraConvert.INSTANCE.toMetric(def);
+        loadExt(metric);
+        return metric;
+    }
+
+    @Override
     public Metric save(Metric metric) {
         long id = SnowflakeIdUtil.nextId();
         metric.setId(String.valueOf(id));
@@ -214,7 +227,6 @@ public class MetricRepositoryImpl implements MetricRepository {
 
     @Override
     public List<Map<String, Object>> countBySubject() {
-        List<Map<String, Object>> result = new java.util.ArrayList<>();
         List<MetricDefinitionDO> list = definitionMapper.selectList(new LambdaQueryWrapper<>());
         Map<String, java.util.Map<String, Object>> group = new java.util.HashMap<>();
         for (MetricDefinitionDO d : list) {
@@ -227,8 +239,7 @@ public class MetricRepositoryImpl implements MetricRepository {
             });
             group.get(sc).put("count", ((Long) group.get(sc).get("count")) + 1);
         }
-        result.addAll(group.values());
-        return result;
+        return new java.util.ArrayList<>(group.values());
     }
 
     private void loadExt(Metric metric) {
