@@ -15,9 +15,10 @@ public interface BiAnalysisService {
      * 执行指标分析
      *
      * @param cmd 分析命令
+     * @param executor 执行人 passport
      * @return 分析结果
      */
-    MetricBiChartDataDTO execute(MetricBiAnalysisCmd cmd);
+    MetricBiChartDataDTO execute(MetricBiAnalysisCmd cmd, String executor);
 
     /**
      * 预览 SQL（不执行）

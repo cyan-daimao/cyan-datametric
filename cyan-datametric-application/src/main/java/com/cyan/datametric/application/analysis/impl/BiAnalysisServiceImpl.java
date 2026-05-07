@@ -10,9 +10,9 @@ import com.cyan.datametric.domain.config.repository.DimensionRepository;
 import com.cyan.datametric.domain.metric.Metric;
 import com.cyan.datametric.domain.metric.MetricAtomicExt;
 import com.cyan.datametric.domain.metric.repository.MetricRepository;
-import com.cyan.datametric.infra.client.DatagatewayClient;
-import com.cyan.datametric.infra.client.dto.SqlExecuteCmd;
-import com.cyan.datametric.infra.client.dto.SqlExecuteResultDTO;
+import com.cyan.datagateway.client.SqlGatewayClient;
+import com.cyan.datagateway.client.cmd.SqlExecuteCmd;
+import com.cyan.datagateway.client.dto.SqlExecuteResultDTO;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.util.CollectionUtils;
@@ -33,18 +33,17 @@ public class BiAnalysisServiceImpl implements BiAnalysisService {
 
     private final MetricRepository metricRepository;
     private final DimensionRepository dimensionRepository;
-    private final DatagatewayClient datagatewayClient;
+    private final SqlGatewayClient sqlGatewayClient;
 
     @Override
-    public MetricBiChartDataDTO execute(MetricBiAnalysisCmd cmd) {
+    public MetricBiChartDataDTO execute(MetricBiAnalysisCmd cmd, String executor) {
         long start = System.currentTimeMillis();
         try {
             String sql = buildSql(cmd);
             SqlExecuteCmd executeCmd = new SqlExecuteCmd()
                     .setSql(sql)
-                    .setDatabase(null)
-                    .setTimeoutMs(60000L);
-            Response<SqlExecuteResultDTO> response = datagatewayClient.execute(executeCmd);
+                    .setPassport(executor);
+            Response<SqlExecuteResultDTO> response = sqlGatewayClient.executeStarRocksSql(executeCmd);
             SqlExecuteResultDTO result = response.getData();
             long cost = System.currentTimeMillis() - start;
 

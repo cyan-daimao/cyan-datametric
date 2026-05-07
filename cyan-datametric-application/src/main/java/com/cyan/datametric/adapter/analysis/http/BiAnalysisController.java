@@ -4,6 +4,7 @@ import com.cyan.arch.common.api.Response;
 import com.cyan.datametric.adapter.analysis.http.dto.MetricBiAnalysisCmd;
 import com.cyan.datametric.adapter.analysis.http.dto.MetricBiChartDataDTO;
 import com.cyan.datametric.application.analysis.BiAnalysisService;
+import com.cyan.employee.login.filter.UserContextHolder;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -30,7 +31,8 @@ public class BiAnalysisController {
      */
     @PostMapping("/execute")
     public Response<MetricBiChartDataDTO> execute(@RequestBody MetricBiAnalysisCmd cmd) {
-        MetricBiChartDataDTO result = biAnalysisService.execute(cmd);
+        String executor = UserContextHolder.getCurrentEmployee().getPassport();
+        MetricBiChartDataDTO result = biAnalysisService.execute(cmd, executor);
         return Response.success(result);
     }
 
