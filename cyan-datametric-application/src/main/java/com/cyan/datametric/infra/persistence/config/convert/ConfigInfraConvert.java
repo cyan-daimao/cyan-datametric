@@ -13,7 +13,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.mapstruct.Mapper;
 import org.mapstruct.factory.Mappers;
 
-import java.util.List;
 
 /**
  * 配置基础设施层转换
@@ -36,7 +35,8 @@ public interface ConfigInfraConvert {
         if (modifierDO.getFieldValues() != null && !modifierDO.getFieldValues().isEmpty()) {
             try {
                 ObjectMapper mapper = new ObjectMapper();
-                m.setFieldValues(mapper.readValue(modifierDO.getFieldValues(), new TypeReference<List<String>>() {}));
+                m.setFieldValues(mapper.readValue(modifierDO.getFieldValues(), new TypeReference<>() {
+                }));
             } catch (Exception e) {
                 m.setFieldValues(null);
             }
@@ -83,13 +83,14 @@ public interface ConfigInfraConvert {
         if (dimensionDO.getDimValues() != null && !dimensionDO.getDimValues().isEmpty()) {
             try {
                 ObjectMapper mapper = new ObjectMapper();
-                d.setDimValues(mapper.readValue(dimensionDO.getDimValues(), new TypeReference<List<String>>() {}));
+                d.setDimValues(mapper.readValue(dimensionDO.getDimValues(), new TypeReference<>() {
+                }));
             } catch (Exception e) {
                 d.setDimValues(null);
             }
         }
         d.setCategoryId(dimensionDO.getCategoryId() == null ? null : String.valueOf(dimensionDO.getCategoryId()));
-        d.setSchema(dimensionDO.getSchema());
+        d.setSchemaName(dimensionDO.getSchemaName());
         d.setTableName(dimensionDO.getTableName());
         d.setColumnName(dimensionDO.getColumnName());
         d.setDisplayColumn(dimensionDO.getDisplayColumn());
@@ -113,7 +114,7 @@ public interface ConfigInfraConvert {
             d.setDimValues(JSON.toJSONString(dimension.getDimValues()));
         }
         d.setCategoryId(dimension.getCategoryId() == null ? null : Long.parseLong(dimension.getCategoryId()));
-        d.setSchema(dimension.getSchema());
+        d.setSchemaName(dimension.getSchemaName());
         d.setTableName(dimension.getTableName());
         d.setColumnName(dimension.getColumnName());
         d.setDisplayColumn(dimension.getDisplayColumn());

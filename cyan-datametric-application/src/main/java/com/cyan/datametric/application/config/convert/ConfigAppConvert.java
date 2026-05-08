@@ -40,7 +40,7 @@ public interface ConfigAppConvert {
         d.setDataType(cmd.getDataType());
         d.setDimValues(cmd.getDimValues());
         d.setCategoryId(cmd.getCategoryId());
-        d.setSchema(cmd.getSchema());
+        d.setSchemaName(cmd.getSchemaName());
         d.setTableName(cmd.getTableName());
         d.setColumnName(cmd.getColumnName());
         d.setDisplayColumn(cmd.getDisplayColumn());

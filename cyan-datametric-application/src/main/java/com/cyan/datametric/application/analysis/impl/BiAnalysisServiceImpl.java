@@ -426,7 +426,7 @@ public class BiAnalysisServiceImpl implements BiAnalysisService {
         info.dimCode = dimCode;
         info.columnName = "`" + dim.getColumnName() + "`";
         info.alias = StringUtils.hasText(ref.getAlias()) ? ref.getAlias() : dim.getDimName();
-        info.tableName = buildDimensionTableRef(dim.getSchema(), dim.getTableName());
+        info.tableName = buildDimensionTableRef(dim.getSchemaName(), dim.getTableName());
         return info;
     }
 

@@ -70,7 +70,7 @@ public class MetricDimensionDO {
      * 数仓维表所在 schema
      */
     @TableField("schema_name")
-    private String schema;
+    private String schemaName;
 
     /**
      * 关联数仓维表名

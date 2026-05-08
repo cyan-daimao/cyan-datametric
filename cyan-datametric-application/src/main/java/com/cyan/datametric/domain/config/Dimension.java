@@ -61,7 +61,7 @@ public class Dimension {
     /**
      * 数仓维表所在 schema
      */
-    private String schema;
+    private String schemaName;
 
     /**
      * 关联数仓维表名
