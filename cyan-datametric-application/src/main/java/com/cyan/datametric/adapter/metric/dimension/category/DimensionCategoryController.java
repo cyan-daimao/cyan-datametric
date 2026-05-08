@@ -13,6 +13,7 @@ import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import lombok.RequiredArgsConstructor;
 
 /**
  * 维度分类控制器
@@ -22,19 +23,18 @@ import java.util.List;
  */
 @RestController
 @RequestMapping("/api/v1/metrics/dimension-categories")
+@RequiredArgsConstructor
 public class DimensionCategoryController {
 
     private final DimensionCategoryService dimensionCategoryService;
+    private final DimensionCategoryAdapterConvert dimensionCategoryAdapterConvert;
 
-    public DimensionCategoryController(DimensionCategoryService dimensionCategoryService) {
-        this.dimensionCategoryService = dimensionCategoryService;
-    }
 
     @GetMapping("/tree")
     public Response<List<DimensionCategoryDTO>> tree() {
         List<DimensionCategoryBO> bos = dimensionCategoryService.tree();
         return Response.success(bos.stream()
-                .map(DimensionCategoryAdapterConvert.INSTANCE::toDimensionCategoryDTO)
+                .map(dimensionCategoryAdapterConvert::toDimensionCategoryDTO)
                 .toList());
     }
 
@@ -42,14 +42,14 @@ public class DimensionCategoryController {
     public Response<PageResultDTO<DimensionCategoryDTO>> page(DimensionCategoryQuery query) {
         com.cyan.arch.common.api.Page<DimensionCategoryBO> page = dimensionCategoryService.page(query);
         return Response.success(new PageResultDTO<>(
-                page.getData().stream().map(DimensionCategoryAdapterConvert.INSTANCE::toDimensionCategoryDTO).toList(),
+                page.getData().stream().map(dimensionCategoryAdapterConvert::toDimensionCategoryDTO).toList(),
                 page.getCurrent(), page.getSize(), page.getTotal()));
     }
 
     @GetMapping("/{id}")
     public Response<DimensionCategoryDTO> detail(@PathVariable("id") String id) {
         DimensionCategoryBO bo = dimensionCategoryService.detail(id);
-        return Response.success(DimensionCategoryAdapterConvert.INSTANCE.toDimensionCategoryDTO(bo));
+        return Response.success(dimensionCategoryAdapterConvert.toDimensionCategoryDTO(bo));
     }
 
     @PostMapping
@@ -57,14 +57,14 @@ public class DimensionCategoryController {
         cmd.setCreateBy(UserContextHolder.getCurrentEmployee().getPassport());
         cmd.setUpdateBy(UserContextHolder.getCurrentEmployee().getPassport());
         DimensionCategoryBO bo = dimensionCategoryService.create(cmd);
-        return Response.success(DimensionCategoryAdapterConvert.INSTANCE.toDimensionCategoryDTO(bo));
+        return Response.success(dimensionCategoryAdapterConvert.toDimensionCategoryDTO(bo));
     }
 
     @PutMapping("/{id}")
     public Response<DimensionCategoryDTO> update(@PathVariable("id") String id, @RequestBody @Valid DimensionCategoryCmd cmd) {
         cmd.setUpdateBy(UserContextHolder.getCurrentEmployee().getPassport());
         DimensionCategoryBO bo = dimensionCategoryService.update(id, cmd);
-        return Response.success(DimensionCategoryAdapterConvert.INSTANCE.toDimensionCategoryDTO(bo));
+        return Response.success(dimensionCategoryAdapterConvert.toDimensionCategoryDTO(bo));
     }
 
     @DeleteMapping("/{id}")

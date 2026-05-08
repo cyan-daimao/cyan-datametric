@@ -15,6 +15,9 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
+import lombok.RequiredArgsConstructor;
+import com.cyan.arch.common.api.Assert;
+import com.cyan.arch.common.api.BusinessException;
 
 /**
  * 维度分类服务实现
@@ -23,47 +26,46 @@ import java.util.stream.Collectors;
  * @since 1.0.0
  */
 @Service
+@RequiredArgsConstructor
 public class DimensionCategoryServiceImpl implements DimensionCategoryService {
 
     private final DimensionCategoryRepository dimensionCategoryRepository;
+    private final DimensionCategoryAppConvert dimensionCategoryAppConvert;
 
-    public DimensionCategoryServiceImpl(DimensionCategoryRepository dimensionCategoryRepository) {
-        this.dimensionCategoryRepository = dimensionCategoryRepository;
-    }
 
     @Override
     public DimensionCategoryBO create(DimensionCategoryCmd cmd) {
-        DimensionCategory category = DimensionCategoryAppConvert.INSTANCE.toDimensionCategory(cmd);
+        DimensionCategory category = dimensionCategoryAppConvert.toDimensionCategory(cmd);
         category = category.save(dimensionCategoryRepository);
-        return DimensionCategoryAppConvert.INSTANCE.toDimensionCategoryBO(category);
+        return dimensionCategoryAppConvert.toDimensionCategoryBO(category);
     }
 
     @Override
     public DimensionCategoryBO update(String id, DimensionCategoryCmd cmd) {
-        DimensionCategory category = DimensionCategoryAppConvert.INSTANCE.toDimensionCategory(cmd);
+        DimensionCategory category = dimensionCategoryAppConvert.toDimensionCategory(cmd);
         category.setId(id);
         category = category.update(dimensionCategoryRepository);
-        return DimensionCategoryAppConvert.INSTANCE.toDimensionCategoryBO(category);
+        return dimensionCategoryAppConvert.toDimensionCategoryBO(category);
     }
 
     @Override
     public void delete(String id) {
-        DimensionCategory category = new DimensionCategory();
-        category.setId(id);
+        DimensionCategory category = dimensionCategoryRepository.findById(id);
+        Assert.notNull(category, new BusinessException("维度分类不存在"));
         category.delete(dimensionCategoryRepository);
     }
 
     @Override
     public DimensionCategoryBO detail(String id) {
         DimensionCategory category = dimensionCategoryRepository.findById(id);
-        return DimensionCategoryAppConvert.INSTANCE.toDimensionCategoryBO(category);
+        return dimensionCategoryAppConvert.toDimensionCategoryBO(category);
     }
 
     @Override
     public Page<DimensionCategoryBO> page(DimensionCategoryQuery query) {
         Page<DimensionCategory> page = dimensionCategoryRepository.page(query);
         List<DimensionCategoryBO> list = page.getData().stream()
-                .map(DimensionCategoryAppConvert.INSTANCE::toDimensionCategoryBO)
+                .map(dimensionCategoryAppConvert::toDimensionCategoryBO)
                 .toList();
         return new Page<>(list, page.getCurrent(), page.getSize(), page.getTotal());
     }
@@ -72,7 +74,7 @@ public class DimensionCategoryServiceImpl implements DimensionCategoryService {
     public List<DimensionCategoryBO> tree() {
         List<DimensionCategory> all = dimensionCategoryRepository.findAll();
         List<DimensionCategoryBO> bos = all.stream()
-                .map(DimensionCategoryAppConvert.INSTANCE::toDimensionCategoryBO)
+                .map(dimensionCategoryAppConvert::toDimensionCategoryBO)
                 .toList();
 
         Map<String, List<DimensionCategoryBO>> parentMap = bos.stream()

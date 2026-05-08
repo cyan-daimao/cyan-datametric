@@ -2,8 +2,8 @@ package com.cyan.datametric.application.analysis.impl;
 
 import com.cyan.arch.common.api.BusinessException;
 import com.cyan.arch.common.api.Response;
-import com.cyan.datametric.adapter.analysis.http.dto.MetricBiAnalysisCmd;
-import com.cyan.datametric.adapter.analysis.http.dto.MetricBiChartDataDTO;
+import com.cyan.datametric.client.dto.MetricBiAnalysisCmd;
+import com.cyan.datametric.client.dto.MetricBiChartDataDTO;
 import com.cyan.datametric.application.analysis.BiAnalysisService;
 import com.cyan.datametric.domain.config.Dimension;
 import com.cyan.datametric.domain.config.repository.DimensionRepository;

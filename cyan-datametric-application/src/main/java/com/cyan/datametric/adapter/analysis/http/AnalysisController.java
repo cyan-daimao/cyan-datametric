@@ -11,6 +11,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
+import lombok.RequiredArgsConstructor;
 
 /**
  * 指标分析控制器
@@ -20,19 +21,18 @@ import java.util.List;
  */
 @RestController
 @RequestMapping("/api/v1/metrics/analysis")
+@RequiredArgsConstructor
 public class AnalysisController {
 
     private final MetricService metricService;
+    private final MetricAdapterConvert metricAdapterConvert;
 
-    public AnalysisController(MetricService metricService) {
-        this.metricService = metricService;
-    }
 
     @GetMapping("/subject-drilldown")
     public Response<List<SubjectDrilldownDTO>> subjectDrilldown(@RequestParam(name = "subjectCode", required = false) String subjectCode) {
         List<SubjectDrilldownBO> bos = metricService.subjectDrilldown(subjectCode);
         return Response.success(bos.stream()
-                .map(MetricAdapterConvert.INSTANCE::toSubjectDrilldownDTO)
+                .map(metricAdapterConvert::toSubjectDrilldownDTO)
                 .toList());
     }
 }

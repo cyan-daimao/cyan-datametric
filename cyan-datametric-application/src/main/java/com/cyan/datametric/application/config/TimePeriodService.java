@@ -8,6 +8,9 @@ import com.cyan.datametric.domain.config.repository.TimePeriodRepository;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
+import lombok.RequiredArgsConstructor;
+import com.cyan.arch.common.api.Assert;
+import com.cyan.arch.common.api.BusinessException;
 
 /**
  * 时间周期服务
@@ -16,44 +19,43 @@ import java.util.List;
  * @since 1.0.0
  */
 @Service
+@RequiredArgsConstructor
 public class TimePeriodService {
 
     private final TimePeriodRepository timePeriodRepository;
+    private final ConfigAppConvert configAppConvert;
 
-    public TimePeriodService(TimePeriodRepository timePeriodRepository) {
-        this.timePeriodRepository = timePeriodRepository;
-    }
 
     public TimePeriodBO create(TimePeriodCmd cmd) {
         if (cmd.getPeriodCode() == null || cmd.getPeriodCode().isBlank()) {
             cmd.setPeriodCode("PERIOD_" + System.currentTimeMillis());
         }
-        TimePeriod timePeriod = ConfigAppConvert.INSTANCE.toTimePeriod(cmd);
+        TimePeriod timePeriod = configAppConvert.toTimePeriod(cmd);
         timePeriod = timePeriod.save(timePeriodRepository);
-        return ConfigAppConvert.INSTANCE.toTimePeriodBO(timePeriod);
+        return configAppConvert.toTimePeriodBO(timePeriod);
     }
 
     public TimePeriodBO update(String id, TimePeriodCmd cmd) {
-        TimePeriod timePeriod = ConfigAppConvert.INSTANCE.toTimePeriod(cmd);
+        TimePeriod timePeriod = configAppConvert.toTimePeriod(cmd);
         timePeriod.setId(id);
         timePeriod = timePeriod.update(timePeriodRepository);
-        return ConfigAppConvert.INSTANCE.toTimePeriodBO(timePeriod);
+        return configAppConvert.toTimePeriodBO(timePeriod);
     }
 
     public void delete(String id) {
-        TimePeriod timePeriod = new TimePeriod();
-        timePeriod.setId(id);
+        TimePeriod timePeriod = timePeriodRepository.findById(id);
+        Assert.notNull(timePeriod, new BusinessException("时间周期不存在"));
         timePeriod.delete(timePeriodRepository);
     }
 
     public TimePeriodBO detail(String id) {
         TimePeriod timePeriod = timePeriodRepository.findById(id);
-        return ConfigAppConvert.INSTANCE.toTimePeriodBO(timePeriod);
+        return configAppConvert.toTimePeriodBO(timePeriod);
     }
 
     public List<TimePeriodBO> listAll() {
         return timePeriodRepository.listAll().stream()
-                .map(ConfigAppConvert.INSTANCE::toTimePeriodBO)
+                .map(configAppConvert::toTimePeriodBO)
                 .toList();
     }
 }

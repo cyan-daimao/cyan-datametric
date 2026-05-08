@@ -1,8 +1,8 @@
 package com.cyan.datametric.adapter.analysis.http;
 
 import com.cyan.arch.common.api.Response;
-import com.cyan.datametric.adapter.analysis.http.dto.MetricBiAnalysisCmd;
-import com.cyan.datametric.adapter.analysis.http.dto.MetricBiChartDataDTO;
+import com.cyan.datametric.client.dto.MetricBiAnalysisCmd;
+import com.cyan.datametric.client.dto.MetricBiChartDataDTO;
 import com.cyan.datametric.application.analysis.BiAnalysisService;
 import com.cyan.employee.login.filter.UserContextHolder;
 import org.springframework.web.bind.annotation.PostMapping;

@@ -8,6 +8,9 @@ import com.cyan.datametric.application.config.convert.ConfigAppConvert;
 import com.cyan.datametric.domain.config.query.ModifierPageQuery;
 import com.cyan.datametric.domain.config.repository.ModifierRepository;
 import org.springframework.stereotype.Service;
+import lombok.RequiredArgsConstructor;
+import com.cyan.arch.common.api.Assert;
+import com.cyan.arch.common.api.BusinessException;
 
 /**
  * 修饰词服务
@@ -16,45 +19,44 @@ import org.springframework.stereotype.Service;
  * @since 1.0.0
  */
 @Service
+@RequiredArgsConstructor
 public class ModifierService {
 
     private final ModifierRepository modifierRepository;
+    private final ConfigAppConvert configAppConvert;
 
-    public ModifierService(ModifierRepository modifierRepository) {
-        this.modifierRepository = modifierRepository;
-    }
 
     public ModifierBO create(ModifierCmd cmd) {
         if (cmd.getModifierCode() == null || cmd.getModifierCode().isBlank()) {
             cmd.setModifierCode("MDF_" + System.currentTimeMillis());
         }
-        Modifier modifier = ConfigAppConvert.INSTANCE.toModifier(cmd);
+        Modifier modifier = configAppConvert.toModifier(cmd);
         modifier = modifier.save(modifierRepository);
-        return ConfigAppConvert.INSTANCE.toModifierBO(modifier);
+        return configAppConvert.toModifierBO(modifier);
     }
 
     public ModifierBO update(String id, ModifierCmd cmd) {
-        Modifier modifier = ConfigAppConvert.INSTANCE.toModifier(cmd);
+        Modifier modifier = configAppConvert.toModifier(cmd);
         modifier.setId(id);
         modifier = modifier.update(modifierRepository);
-        return ConfigAppConvert.INSTANCE.toModifierBO(modifier);
+        return configAppConvert.toModifierBO(modifier);
     }
 
     public void delete(String id) {
-        Modifier modifier = new Modifier();
-        modifier.setId(id);
+        Modifier modifier = modifierRepository.findById(id);
+        Assert.notNull(modifier, new BusinessException("修饰词不存在"));
         modifier.delete(modifierRepository);
     }
 
     public ModifierBO detail(String id) {
         Modifier modifier = modifierRepository.findById(id);
-        return ConfigAppConvert.INSTANCE.toModifierBO(modifier);
+        return configAppConvert.toModifierBO(modifier);
     }
 
     public Page<ModifierBO> page(ModifierPageQuery query) {
         Page<Modifier> page = modifierRepository.page(query);
         java.util.List<ModifierBO> list = page.getData().stream()
-                .map(ConfigAppConvert.INSTANCE::toModifierBO)
+                .map(configAppConvert::toModifierBO)
                 .toList();
         return new Page<>(list, page.getCurrent(), page.getSize(), page.getTotal());
     }

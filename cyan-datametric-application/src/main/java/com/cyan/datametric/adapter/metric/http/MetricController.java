@@ -2,7 +2,6 @@ package com.cyan.datametric.adapter.metric.http;
 
 import com.cyan.arch.common.api.Response;
 import com.cyan.datametric.adapter.common.PageResultDTO;
-import com.cyan.datametric.adapter.metric.http.convert.MetricAdapterConvert;
 import com.cyan.datametric.adapter.metric.http.dto.*;
 import com.cyan.datametric.application.metric.MetricService;
 import com.cyan.datametric.application.metric.bo.*;
@@ -27,6 +26,7 @@ import java.util.List;
 public class MetricController {
 
     private final MetricService metricService;
+    private final com.cyan.datametric.adapter.metric.http.convert.MetricAdapterConvert metricAdapterConvert;
 
 
     // ==================== 指标定义 ====================
@@ -36,14 +36,14 @@ public class MetricController {
         String currentUser = UserContextHolder.getCurrentEmployee().getPassport();
         com.cyan.arch.common.api.Page<MetricBO> page = metricService.page(query, currentUser);
         return Response.success(new PageResultDTO<>(
-                page.getData().stream().map(MetricAdapterConvert.INSTANCE::toMetricDTO).toList(),
+                page.getData().stream().map(metricAdapterConvert::toMetricDTO).toList(),
                 page.getCurrent(), page.getSize(), page.getTotal()));
     }
 
     @GetMapping("/{id}")
     public Response<MetricDetailDTO> detail(@PathVariable("id") String id) {
         MetricBO bo = metricService.detail(id);
-        return Response.success(MetricAdapterConvert.INSTANCE.toMetricDetailDTO(bo));
+        return Response.success(metricAdapterConvert.toMetricDetailDTO(bo));
     }
 
     @PostMapping("/atomic")
@@ -51,14 +51,14 @@ public class MetricController {
         cmd.setCreateBy(UserContextHolder.getCurrentEmployee().getPassport());
         cmd.setUpdateBy(UserContextHolder.getCurrentEmployee().getPassport());
         MetricBO bo = metricService.createAtomic(cmd);
-        return Response.success(MetricAdapterConvert.INSTANCE.toMetricDTO(bo));
+        return Response.success(metricAdapterConvert.toMetricDTO(bo));
     }
 
     @PutMapping("/atomic/{id}")
     public Response<MetricDTO> updateAtomic(@PathVariable("id") String id, @RequestBody @Valid AtomicMetricCmd cmd) {
         cmd.setUpdateBy(UserContextHolder.getCurrentEmployee().getPassport());
         MetricBO bo = metricService.updateAtomic(id, cmd);
-        return Response.success(MetricAdapterConvert.INSTANCE.toMetricDTO(bo));
+        return Response.success(metricAdapterConvert.toMetricDTO(bo));
     }
 
     @PostMapping("/derived")
@@ -66,14 +66,14 @@ public class MetricController {
         cmd.setCreateBy(UserContextHolder.getCurrentEmployee().getPassport());
         cmd.setUpdateBy(UserContextHolder.getCurrentEmployee().getPassport());
         MetricBO bo = metricService.createDerived(cmd);
-        return Response.success(MetricAdapterConvert.INSTANCE.toMetricDTO(bo));
+        return Response.success(metricAdapterConvert.toMetricDTO(bo));
     }
 
     @PutMapping("/derived/{id}")
     public Response<MetricDTO> updateDerived(@PathVariable("id") String id, @RequestBody @Valid DerivedMetricCmd cmd) {
         cmd.setUpdateBy(UserContextHolder.getCurrentEmployee().getPassport());
         MetricBO bo = metricService.updateDerived(id, cmd);
-        return Response.success(MetricAdapterConvert.INSTANCE.toMetricDTO(bo));
+        return Response.success(metricAdapterConvert.toMetricDTO(bo));
     }
 
     @PostMapping("/composite")
@@ -81,14 +81,14 @@ public class MetricController {
         cmd.setCreateBy(UserContextHolder.getCurrentEmployee().getPassport());
         cmd.setUpdateBy(UserContextHolder.getCurrentEmployee().getPassport());
         MetricBO bo = metricService.createComposite(cmd);
-        return Response.success(MetricAdapterConvert.INSTANCE.toMetricDTO(bo));
+        return Response.success(metricAdapterConvert.toMetricDTO(bo));
     }
 
     @PutMapping("/composite/{id}")
     public Response<MetricDTO> updateComposite(@PathVariable("id") String id, @RequestBody @Valid CompositeMetricCmd cmd) {
         cmd.setUpdateBy(UserContextHolder.getCurrentEmployee().getPassport());
         MetricBO bo = metricService.updateComposite(id, cmd);
-        return Response.success(MetricAdapterConvert.INSTANCE.toMetricDTO(bo));
+        return Response.success(metricAdapterConvert.toMetricDTO(bo));
     }
 
     @DeleteMapping("/{id}")
@@ -100,7 +100,7 @@ public class MetricController {
     @PutMapping("/{id}/status")
     public Response<MetricDTO> updateStatus(@PathVariable("id") String id, @RequestBody UpdateStatusCmd cmd) {
         MetricBO bo = metricService.updateStatus(id, cmd);
-        return Response.success(MetricAdapterConvert.INSTANCE.toMetricDTO(bo));
+        return Response.success(metricAdapterConvert.toMetricDTO(bo));
     }
 
     // ==================== SQL 预览与试算 ====================
@@ -118,7 +118,7 @@ public class MetricController {
         String currentUser = UserContextHolder.getCurrentEmployee().getPassport();
         com.cyan.arch.common.api.Page<MetricBO> page = metricService.dictionaryPage(query, currentUser);
         return Response.success(new PageResultDTO<>(
-                page.getData().stream().map(MetricAdapterConvert.INSTANCE::toDictionaryMetricDTO).toList(),
+                page.getData().stream().map(metricAdapterConvert::toDictionaryMetricDTO).toList(),
                 page.getCurrent(), page.getSize(), page.getTotal()));
     }
 
@@ -144,7 +144,7 @@ public class MetricController {
             @RequestParam(name = "direction", defaultValue = "BOTH") String direction,
             @RequestParam(name = "maxLevel", defaultValue = "3") int maxLevel) {
         LineageTreeBO bo = metricService.lineage(id, direction, maxLevel);
-        return Response.success(MetricAdapterConvert.INSTANCE.toLineageTreeDTO(bo));
+        return Response.success(metricAdapterConvert.toLineageTreeDTO(bo));
     }
 
     // ==================== 版本管理 ====================
@@ -153,7 +153,7 @@ public class MetricController {
     public Response<List<MetricVersionDTO>> listVersions(@PathVariable("id") String id) {
         List<MetricVersionBO> list = metricService.listVersions(id);
         return Response.success(list.stream()
-                .map(MetricAdapterConvert.INSTANCE::toMetricVersionDTO)
+                .map(metricAdapterConvert::toMetricVersionDTO)
                 .toList());
     }
 
@@ -162,6 +162,6 @@ public class MetricController {
             @PathVariable("id") String id,
             @PathVariable("version") Integer version) {
         MetricBO bo = metricService.rollback(id, version);
-        return Response.success(MetricAdapterConvert.INSTANCE.toMetricDetailDTO(bo));
+        return Response.success(metricAdapterConvert.toMetricDetailDTO(bo));
     }
 }

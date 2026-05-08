@@ -11,6 +11,7 @@ import org.springframework.stereotype.Repository;
 
 import java.util.List;
 import java.util.Optional;
+import lombok.RequiredArgsConstructor;
 
 /**
  * 时间周期仓储实现
@@ -19,25 +20,24 @@ import java.util.Optional;
  * @since 1.0.0
  */
 @Repository
+@RequiredArgsConstructor
 public class TimePeriodRepositoryImpl implements TimePeriodRepository {
 
     private final MetricTimePeriodMapper timePeriodMapper;
+    private final ConfigInfraConvert configInfraConvert;
 
-    public TimePeriodRepositoryImpl(MetricTimePeriodMapper timePeriodMapper) {
-        this.timePeriodMapper = timePeriodMapper;
-    }
 
     @Override
     public TimePeriod findById(String id) {
         MetricTimePeriodDO periodDO = timePeriodMapper.selectById(Long.parseLong(id));
-        return ConfigInfraConvert.INSTANCE.toTimePeriod(periodDO);
+        return configInfraConvert.toTimePeriod(periodDO);
     }
 
     @Override
     public List<TimePeriod> listAll() {
         List<MetricTimePeriodDO> list = timePeriodMapper.selectList(new LambdaQueryWrapper<>());
         return Optional.ofNullable(list).orElse(List.of()).stream()
-                .map(ConfigInfraConvert.INSTANCE::toTimePeriod)
+                .map(configInfraConvert::toTimePeriod)
                 .toList();
     }
 
@@ -45,14 +45,14 @@ public class TimePeriodRepositoryImpl implements TimePeriodRepository {
     public TimePeriod save(TimePeriod timePeriod) {
         long id = SnowflakeIdUtil.nextId();
         timePeriod.setId(String.valueOf(id));
-        MetricTimePeriodDO periodDO = ConfigInfraConvert.INSTANCE.toTimePeriodDO(timePeriod);
+        MetricTimePeriodDO periodDO = configInfraConvert.toTimePeriodDO(timePeriod);
         timePeriodMapper.insert(periodDO);
         return findById(timePeriod.getId());
     }
 
     @Override
     public TimePeriod update(TimePeriod timePeriod) {
-        MetricTimePeriodDO periodDO = ConfigInfraConvert.INSTANCE.toTimePeriodDO(timePeriod);
+        MetricTimePeriodDO periodDO = configInfraConvert.toTimePeriodDO(timePeriod);
         timePeriodMapper.updateById(periodDO);
         return findById(timePeriod.getId());
     }

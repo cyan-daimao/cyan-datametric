@@ -11,6 +11,7 @@ import com.cyan.datametric.domain.config.query.DimensionPageQuery;
 import com.cyan.employee.login.filter.UserContextHolder;
 import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.*;
+import lombok.RequiredArgsConstructor;
 
 /**
  * 公共维度控制器
@@ -20,26 +21,25 @@ import org.springframework.web.bind.annotation.*;
  */
 @RestController
 @RequestMapping("/api/v1/metrics/dimensions")
+@RequiredArgsConstructor
 public class DimensionController {
 
     private final DimensionService dimensionService;
+    private final ConfigAdapterConvert configAdapterConvert;
 
-    public DimensionController(DimensionService dimensionService) {
-        this.dimensionService = dimensionService;
-    }
 
     @GetMapping("/page")
     public Response<PageResultDTO<DimensionDTO>> page(DimensionPageQuery query) {
         com.cyan.arch.common.api.Page<DimensionBO> page = dimensionService.page(query);
         return Response.success(new PageResultDTO<>(
-                page.getData().stream().map(ConfigAdapterConvert.INSTANCE::toDimensionDTO).toList(),
+                page.getData().stream().map(configAdapterConvert::toDimensionDTO).toList(),
                 page.getCurrent(), page.getSize(), page.getTotal()));
     }
 
     @GetMapping("/{id}")
     public Response<DimensionDTO> detail(@PathVariable("id") String id) {
         DimensionBO bo = dimensionService.detail(id);
-        return Response.success(ConfigAdapterConvert.INSTANCE.toDimensionDTO(bo));
+        return Response.success(configAdapterConvert.toDimensionDTO(bo));
     }
 
     @PostMapping
@@ -47,14 +47,14 @@ public class DimensionController {
         cmd.setCreateBy(UserContextHolder.getCurrentEmployee().getPassport());
         cmd.setUpdateBy(UserContextHolder.getCurrentEmployee().getPassport());
         DimensionBO bo = dimensionService.create(cmd);
-        return Response.success(ConfigAdapterConvert.INSTANCE.toDimensionDTO(bo));
+        return Response.success(configAdapterConvert.toDimensionDTO(bo));
     }
 
     @PutMapping("/{id}")
     public Response<DimensionDTO> update(@PathVariable("id") String id, @RequestBody @Valid DimensionCmd cmd) {
         cmd.setUpdateBy(UserContextHolder.getCurrentEmployee().getPassport());
         DimensionBO bo = dimensionService.update(id, cmd);
-        return Response.success(ConfigAdapterConvert.INSTANCE.toDimensionDTO(bo));
+        return Response.success(configAdapterConvert.toDimensionDTO(bo));
     }
 
     @DeleteMapping("/{id}")

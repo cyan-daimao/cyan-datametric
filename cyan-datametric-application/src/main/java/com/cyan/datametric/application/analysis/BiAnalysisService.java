@@ -1,7 +1,7 @@
 package com.cyan.datametric.application.analysis;
 
-import com.cyan.datametric.adapter.analysis.http.dto.MetricBiAnalysisCmd;
-import com.cyan.datametric.adapter.analysis.http.dto.MetricBiChartDataDTO;
+import com.cyan.datametric.client.dto.MetricBiAnalysisCmd;
+import com.cyan.datametric.client.dto.MetricBiChartDataDTO;
 
 /**
  * 指标 BI 分析服务

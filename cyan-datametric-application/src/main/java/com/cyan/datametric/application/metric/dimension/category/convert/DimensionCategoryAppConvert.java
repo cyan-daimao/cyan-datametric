@@ -5,7 +5,6 @@ import com.cyan.datametric.application.metric.dimension.category.bo.DimensionCat
 import com.cyan.datametric.application.metric.dimension.category.cmd.DimensionCategoryCmd;
 import com.cyan.datametric.domain.metric.dimension.category.DimensionCategory;
 import org.mapstruct.Mapper;
-import org.mapstruct.factory.Mappers;
 
 /**
  * 维度分类应用层转换
@@ -13,9 +12,8 @@ import org.mapstruct.factory.Mappers;
  * @author cy.Y
  * @since 1.0.0
  */
-@Mapper(uses = MapstructConvert.class)
+@Mapper(componentModel = "spring", uses = MapstructConvert.class)
 public interface DimensionCategoryAppConvert {
-    DimensionCategoryAppConvert INSTANCE = Mappers.getMapper(DimensionCategoryAppConvert.class);
 
     DimensionCategoryBO toDimensionCategoryBO(DimensionCategory category);
 

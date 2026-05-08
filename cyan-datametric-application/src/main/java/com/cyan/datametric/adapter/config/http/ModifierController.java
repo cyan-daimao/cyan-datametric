@@ -11,6 +11,7 @@ import com.cyan.datametric.domain.config.query.ModifierPageQuery;
 import com.cyan.employee.login.filter.UserContextHolder;
 import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.*;
+import lombok.RequiredArgsConstructor;
 
 /**
  * 修饰词控制器
@@ -20,26 +21,25 @@ import org.springframework.web.bind.annotation.*;
  */
 @RestController
 @RequestMapping("/api/v1/metrics/modifiers")
+@RequiredArgsConstructor
 public class ModifierController {
 
     private final ModifierService modifierService;
+    private final ConfigAdapterConvert configAdapterConvert;
 
-    public ModifierController(ModifierService modifierService) {
-        this.modifierService = modifierService;
-    }
 
     @GetMapping("/page")
     public Response<PageResultDTO<ModifierDTO>> page(ModifierPageQuery query) {
         com.cyan.arch.common.api.Page<ModifierBO> page = modifierService.page(query);
         return Response.success(new PageResultDTO<>(
-                page.getData().stream().map(ConfigAdapterConvert.INSTANCE::toModifierDTO).toList(),
+                page.getData().stream().map(configAdapterConvert::toModifierDTO).toList(),
                 page.getCurrent(), page.getSize(), page.getTotal()));
     }
 
     @GetMapping("/{id}")
     public Response<ModifierDTO> detail(@PathVariable("id") String id) {
         ModifierBO bo = modifierService.detail(id);
-        return Response.success(ConfigAdapterConvert.INSTANCE.toModifierDTO(bo));
+        return Response.success(configAdapterConvert.toModifierDTO(bo));
     }
 
     @PostMapping
@@ -47,14 +47,14 @@ public class ModifierController {
         cmd.setCreateBy(UserContextHolder.getCurrentEmployee().getPassport());
         cmd.setUpdateBy(UserContextHolder.getCurrentEmployee().getPassport());
         ModifierBO bo = modifierService.create(cmd);
-        return Response.success(ConfigAdapterConvert.INSTANCE.toModifierDTO(bo));
+        return Response.success(configAdapterConvert.toModifierDTO(bo));
     }
 
     @PutMapping("/{id}")
     public Response<ModifierDTO> update(@PathVariable("id") String id, @RequestBody @Valid ModifierCmd cmd) {
         cmd.setUpdateBy(UserContextHolder.getCurrentEmployee().getPassport());
         ModifierBO bo = modifierService.update(id, cmd);
-        return Response.success(ConfigAdapterConvert.INSTANCE.toModifierDTO(bo));
+        return Response.success(configAdapterConvert.toModifierDTO(bo));
     }
 
     @DeleteMapping("/{id}")

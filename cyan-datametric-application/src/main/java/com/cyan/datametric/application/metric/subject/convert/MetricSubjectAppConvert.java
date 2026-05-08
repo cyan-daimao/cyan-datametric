@@ -5,7 +5,6 @@ import com.cyan.datametric.application.metric.subject.bo.MetricSubjectBO;
 import com.cyan.datametric.application.metric.subject.cmd.MetricSubjectCmd;
 import com.cyan.datametric.domain.metric.subject.MetricSubject;
 import org.mapstruct.Mapper;
-import org.mapstruct.factory.Mappers;
 
 /**
  * 指标主题域应用层转换
@@ -13,9 +12,8 @@ import org.mapstruct.factory.Mappers;
  * @author cy.Y
  * @since 1.0.0
  */
-@Mapper(uses = MapstructConvert.class)
+@Mapper(componentModel = "spring", uses = MapstructConvert.class)
 public interface MetricSubjectAppConvert {
-    MetricSubjectAppConvert INSTANCE = Mappers.getMapper(MetricSubjectAppConvert.class);
 
     MetricSubjectBO toMetricSubjectBO(MetricSubject subject);
 

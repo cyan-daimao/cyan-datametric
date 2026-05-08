@@ -8,6 +8,7 @@ import com.cyan.datametric.application.metric.bo.DashboardStatsBO;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import lombok.RequiredArgsConstructor;
 
 /**
  * 指标概览看板控制器
@@ -17,17 +18,16 @@ import org.springframework.web.bind.annotation.RestController;
  */
 @RestController
 @RequestMapping("/api/v1/metrics/dashboard")
+@RequiredArgsConstructor
 public class DashboardController {
 
     private final MetricService metricService;
+    private final MetricAdapterConvert metricAdapterConvert;
 
-    public DashboardController(MetricService metricService) {
-        this.metricService = metricService;
-    }
 
     @GetMapping("/stats")
     public Response<DashboardStatsDTO> stats() {
         DashboardStatsBO bo = metricService.dashboardStats();
-        return Response.success(MetricAdapterConvert.INSTANCE.toDashboardStatsDTO(bo));
+        return Response.success(metricAdapterConvert.toDashboardStatsDTO(bo));
     }
 }

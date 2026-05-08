@@ -8,6 +8,7 @@ import com.cyan.datametric.domain.metric.repository.MetricRepository;
 import com.cyan.datametric.enums.MetricStatus;
 import com.cyan.datametric.enums.MetricType;
 import com.cyan.datametric.infra.persistence.metric.convert.MetricInfraConvert;
+import lombok.RequiredArgsConstructor;
 import com.cyan.datametric.infra.persistence.metric.dos.MetricAtomicDO;
 import com.cyan.datametric.infra.persistence.metric.dos.MetricCompositeDO;
 import com.cyan.datametric.infra.persistence.metric.dos.MetricDefinitionDO;
@@ -33,6 +34,7 @@ import java.util.Optional;
  * @since 1.0.0
  */
 @Repository
+@RequiredArgsConstructor
 public class MetricRepositoryImpl implements MetricRepository {
 
     private final MetricDefinitionMapper definitionMapper;
@@ -40,18 +42,7 @@ public class MetricRepositoryImpl implements MetricRepository {
     private final MetricDerivedMapper derivedMapper;
     private final MetricCompositeMapper compositeMapper;
     private final MetricDefinitionHistoryMapper historyMapper;
-
-    public MetricRepositoryImpl(MetricDefinitionMapper definitionMapper,
-                                MetricAtomicMapper atomicMapper,
-                                MetricDerivedMapper derivedMapper,
-                                MetricCompositeMapper compositeMapper,
-                                MetricDefinitionHistoryMapper historyMapper) {
-        this.definitionMapper = definitionMapper;
-        this.atomicMapper = atomicMapper;
-        this.derivedMapper = derivedMapper;
-        this.compositeMapper = compositeMapper;
-        this.historyMapper = historyMapper;
-    }
+    private final MetricInfraConvert metricInfraConvert;
 
     @Override
     public Metric findById(String id) {
@@ -59,7 +50,7 @@ public class MetricRepositoryImpl implements MetricRepository {
         if (def == null) {
             return null;
         }
-        Metric metric = MetricInfraConvert.INSTANCE.toMetric(def);
+        Metric metric = metricInfraConvert.toMetric(def);
         loadExt(metric);
         return metric;
     }
@@ -75,7 +66,7 @@ public class MetricRepositoryImpl implements MetricRepository {
                 .orderByDesc(MetricDefinitionDO::getUpdatedAt);
         Page<MetricDefinitionDO> result = definitionMapper.selectPage(page, wrapper);
         List<Metric> list = Optional.ofNullable(result.getRecords()).orElse(List.of()).stream()
-                .map(MetricInfraConvert.INSTANCE::toMetric)
+                .map(metricInfraConvert::toMetric)
                 .toList();
         return new com.cyan.arch.common.api.Page<>(list, result.getCurrent(), result.getSize(), result.getTotal());
     }
@@ -93,7 +84,7 @@ public class MetricRepositoryImpl implements MetricRepository {
                 .orderByDesc(MetricDefinitionDO::getUpdatedAt);
         Page<MetricDefinitionDO> result = definitionMapper.selectPage(page, wrapper);
         List<Metric> list = Optional.ofNullable(result.getRecords()).orElse(List.of()).stream()
-                .map(MetricInfraConvert.INSTANCE::toMetric)
+                .map(metricInfraConvert::toMetric)
                 .toList();
         return new com.cyan.arch.common.api.Page<>(list, result.getCurrent(), result.getSize(), result.getTotal());
     }
@@ -106,7 +97,7 @@ public class MetricRepositoryImpl implements MetricRepository {
         if (def == null) {
             return null;
         }
-        Metric metric = MetricInfraConvert.INSTANCE.toMetric(def);
+        Metric metric = metricInfraConvert.toMetric(def);
         loadExt(metric);
         return metric;
     }
@@ -119,7 +110,7 @@ public class MetricRepositoryImpl implements MetricRepository {
         if (def == null) {
             return null;
         }
-        Metric metric = MetricInfraConvert.INSTANCE.toMetric(def);
+        Metric metric = metricInfraConvert.toMetric(def);
         loadExt(metric);
         return metric;
     }
@@ -128,7 +119,7 @@ public class MetricRepositoryImpl implements MetricRepository {
     public Metric save(Metric metric) {
         long id = SnowflakeIdUtil.nextId();
         metric.setId(String.valueOf(id));
-        MetricDefinitionDO def = MetricInfraConvert.INSTANCE.toMetricDefinitionDO(metric);
+        MetricDefinitionDO def = metricInfraConvert.toMetricDefinitionDO(metric);
         definitionMapper.insert(def);
         saveExt(metric);
         return findById(metric.getId());
@@ -136,7 +127,7 @@ public class MetricRepositoryImpl implements MetricRepository {
 
     @Override
     public Metric update(Metric metric) {
-        MetricDefinitionDO def = MetricInfraConvert.INSTANCE.toMetricDefinitionDO(metric);
+        MetricDefinitionDO def = metricInfraConvert.toMetricDefinitionDO(metric);
         definitionMapper.updateById(def);
         updateExt(metric);
         return findById(metric.getId());
@@ -171,7 +162,7 @@ public class MetricRepositoryImpl implements MetricRepository {
         LambdaQueryWrapper<MetricDefinitionDO> defWrapper = new LambdaQueryWrapper<MetricDefinitionDO>()
                 .in(MetricDefinitionDO::getId, allIds);
         List<MetricDefinitionDO> defs = definitionMapper.selectList(defWrapper);
-        return defs.stream().map(MetricInfraConvert.INSTANCE::toMetric).toList();
+        return defs.stream().map(metricInfraConvert::toMetric).toList();
     }
 
     @Override
@@ -190,7 +181,7 @@ public class MetricRepositoryImpl implements MetricRepository {
 
     @Override
     public void saveSnapshot(Metric metric) {
-        MetricDefinitionHistoryDO historyDO = MetricInfraConvert.INSTANCE.toMetricDefinitionHistoryDO(metric);
+        MetricDefinitionHistoryDO historyDO = metricInfraConvert.toMetricDefinitionHistoryDO(metric);
         historyMapper.insert(historyDO);
     }
 
@@ -201,7 +192,7 @@ public class MetricRepositoryImpl implements MetricRepository {
                 .orderByDesc(MetricDefinitionHistoryDO::getVersion);
         List<MetricDefinitionHistoryDO> list = historyMapper.selectList(wrapper);
         return list.stream()
-                .map(MetricInfraConvert.INSTANCE::toMetric)
+                .map(metricInfraConvert::toMetric)
                 .toList();
     }
 
@@ -214,12 +205,12 @@ public class MetricRepositoryImpl implements MetricRepository {
         if (history == null) {
             return null;
         }
-        return MetricInfraConvert.INSTANCE.toMetric(history);
+        return metricInfraConvert.toMetric(history);
     }
 
     @Override
     public Metric rollbackFromHistory(Metric historyMetric) {
-        MetricDefinitionDO def = MetricInfraConvert.INSTANCE.toMetricDefinitionDO(historyMetric);
+        MetricDefinitionDO def = metricInfraConvert.toMetricDefinitionDO(historyMetric);
         definitionMapper.updateById(def);
         updateExt(historyMetric);
         return findById(historyMetric.getId());
@@ -253,7 +244,7 @@ public class MetricRepositoryImpl implements MetricRepository {
                         .eq(MetricAtomicDO::getMetricId, mid);
                 MetricAtomicDO atomic = atomicMapper.selectOne(w);
                 if (atomic != null) {
-                    metric.setAtomicExt(MetricInfraConvert.INSTANCE.toAtomicExt(atomic));
+                    metric.setAtomicExt(metricInfraConvert.toAtomicExt(atomic));
                 }
             }
             case DERIVED -> {
@@ -261,7 +252,7 @@ public class MetricRepositoryImpl implements MetricRepository {
                         .eq(MetricDerivedDO::getMetricId, mid);
                 MetricDerivedDO derived = derivedMapper.selectOne(w);
                 if (derived != null) {
-                    metric.setDerivedExt(MetricInfraConvert.INSTANCE.toDerivedExt(derived));
+                    metric.setDerivedExt(metricInfraConvert.toDerivedExt(derived));
                 }
             }
             case COMPOSITE -> {
@@ -269,7 +260,7 @@ public class MetricRepositoryImpl implements MetricRepository {
                         .eq(MetricCompositeDO::getMetricId, mid);
                 MetricCompositeDO composite = compositeMapper.selectOne(w);
                 if (composite != null) {
-                    metric.setCompositeExt(MetricInfraConvert.INSTANCE.toCompositeExt(composite));
+                    metric.setCompositeExt(metricInfraConvert.toCompositeExt(composite));
                 }
             }
         }
@@ -283,7 +274,7 @@ public class MetricRepositoryImpl implements MetricRepository {
         switch (metric.getMetricType()) {
             case ATOMIC -> {
                 if (metric.getAtomicExt() != null) {
-                    MetricAtomicDO d = MetricInfraConvert.INSTANCE.toAtomicDO(metric.getAtomicExt());
+                    MetricAtomicDO d = metricInfraConvert.toAtomicDO(metric.getAtomicExt());
                     d.setId(SnowflakeIdUtil.nextId());
                     d.setMetricId(mid);
                     atomicMapper.insert(d);
@@ -291,7 +282,7 @@ public class MetricRepositoryImpl implements MetricRepository {
             }
             case DERIVED -> {
                 if (metric.getDerivedExt() != null) {
-                    MetricDerivedDO d = MetricInfraConvert.INSTANCE.toDerivedDO(metric.getDerivedExt());
+                    MetricDerivedDO d = metricInfraConvert.toDerivedDO(metric.getDerivedExt());
                     d.setId(SnowflakeIdUtil.nextId());
                     d.setMetricId(mid);
                     derivedMapper.insert(d);
@@ -299,7 +290,7 @@ public class MetricRepositoryImpl implements MetricRepository {
             }
             case COMPOSITE -> {
                 if (metric.getCompositeExt() != null) {
-                    MetricCompositeDO d = MetricInfraConvert.INSTANCE.toCompositeDO(metric.getCompositeExt());
+                    MetricCompositeDO d = metricInfraConvert.toCompositeDO(metric.getCompositeExt());
                     d.setId(SnowflakeIdUtil.nextId());
                     d.setMetricId(mid);
                     compositeMapper.insert(d);

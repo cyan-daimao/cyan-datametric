@@ -13,7 +13,6 @@ import com.cyan.datametric.domain.config.TimePeriod;
 import com.cyan.datametric.enums.PeriodType;
 import com.cyan.datametric.enums.RelativeUnit;
 import org.mapstruct.Mapper;
-import org.mapstruct.factory.Mappers;
 
 /**
  * 配置应用层转换
@@ -21,9 +20,8 @@ import org.mapstruct.factory.Mappers;
  * @author cy.Y
  * @since 1.0.0
  */
-@Mapper(uses = MapstructConvert.class)
+@Mapper(componentModel = "spring", uses = MapstructConvert.class)
 public interface ConfigAppConvert {
-    ConfigAppConvert INSTANCE = Mappers.getMapper(ConfigAppConvert.class);
 
     ModifierBO toModifierBO(Modifier modifier);
 
