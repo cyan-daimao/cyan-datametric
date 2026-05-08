@@ -21,6 +21,7 @@ import com.cyan.datametric.domain.metric.query.MetricPageQuery;
 import com.cyan.datametric.domain.metric.repository.MetricRepository;
 import com.cyan.datametric.domain.metric.subject.MetricSubject;
 import com.cyan.datametric.domain.metric.subject.repository.MetricSubjectRepository;
+import com.cyan.datametric.enums.MetricType;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -130,6 +131,9 @@ public class MetricBiAnalysisServiceImpl implements MetricBiAnalysisService {
             subjectNameMap = Map.of();
         }
 
+        // 缓存已加载的完整指标信息，避免 N+1 重复查询
+        Map<String, com.cyan.datametric.domain.metric.Metric> metricCache = new java.util.HashMap<>();
+
         return page.getData().stream()
                 .map(m -> {
                     BiMetricDTO dto = new BiMetricDTO();
@@ -139,11 +143,30 @@ public class MetricBiAnalysisServiceImpl implements MetricBiAnalysisService {
                     dto.setMetricType(m.getMetricType() == null ? null : m.getMetricType().getCode());
                     dto.setSubjectCode(m.getSubjectCode());
                     dto.setSubjectName(subjectNameMap.get(m.getSubjectCode()));
-                    if (m.getAtomicExt() != null) {
-                        dto.setStatFunc(m.getAtomicExt().getStatFunc() == null ? null : m.getAtomicExt().getStatFunc().getCode());
-                        // dataType 当前数据模型未存储，留空
-                        dto.setDataType(null);
+
+                    String tableRef = null;
+                    if (m.getMetricType() == MetricType.ATOMIC) {
+                        com.cyan.datametric.domain.metric.Metric full = metricCache.computeIfAbsent(m.getId(), metricRepository::findById);
+                        if (full != null && full.getAtomicExt() != null) {
+                            dto.setStatFunc(full.getAtomicExt().getStatFunc() == null ? null : full.getAtomicExt().getStatFunc().getCode());
+                            dto.setDataType(null);
+                            tableRef = normalizeTableRef(full.getAtomicExt().getDbName() + "." + full.getAtomicExt().getTblName());
+                        }
+                    } else if (m.getMetricType() == MetricType.DERIVED) {
+                        com.cyan.datametric.domain.metric.Metric full = metricCache.computeIfAbsent(m.getId(), metricRepository::findById);
+                        if (full != null && full.getDerivedExt() != null) {
+                            String atomicMetricId = full.getDerivedExt().getAtomicMetricId();
+                            if (atomicMetricId != null && !atomicMetricId.isBlank()) {
+                                com.cyan.datametric.domain.metric.Metric atomic = metricCache.computeIfAbsent(atomicMetricId, metricRepository::findById);
+                                if (atomic != null && atomic.getAtomicExt() != null) {
+                                    tableRef = normalizeTableRef(atomic.getAtomicExt().getDbName() + "." + atomic.getAtomicExt().getTblName());
+                                }
+                            }
+                        }
                     }
+                    // COMPOSITE 指标的 tableRef 保持为 null
+
+                    dto.setTableRef(tableRef);
                     dto.setDescription(m.getBizCaliber());
                     return dto;
                 })
@@ -195,5 +218,23 @@ public class MetricBiAnalysisServiceImpl implements MetricBiAnalysisService {
                     return dto;
                 })
                 .toList();
+    }
+
+    /**
+     * 规范化表引用格式：2段（schema.table）补全默认 catalog（iceberg），3段保持不变
+     */
+    private String normalizeTableRef(String tableRef) {
+        if (tableRef == null || tableRef.isBlank()) {
+            return tableRef;
+        }
+        String[] parts = tableRef.split("\\.");
+        if (parts.length == 2) {
+            return "iceberg" + "." + tableRef;
+        }
+        if (parts.length == 1) {
+            throw new IllegalArgumentException(
+                    "表引用格式错误，期望 schema.table 或 catalog.schema.table，实际: " + tableRef);
+        }
+        return tableRef;
     }
 }

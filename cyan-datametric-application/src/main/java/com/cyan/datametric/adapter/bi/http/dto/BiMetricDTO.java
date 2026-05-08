@@ -57,4 +57,9 @@ public class BiMetricDTO {
      * 描述
      */
     private String description;
+
+    /**
+     * 事实表全名（catalog.schema.table）
+     */
+    private String tableRef;
 }
