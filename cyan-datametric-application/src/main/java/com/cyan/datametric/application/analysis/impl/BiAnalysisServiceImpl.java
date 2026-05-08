@@ -151,6 +151,17 @@ public class BiAnalysisServiceImpl implements BiAnalysisService {
         return StringUtils.hasText(dim.displayColumn) ? dim.displayColumn : dim.columnName;
     }
 
+    /**
+     * 给 SQL 表达式中的列引用加上表别名前缀（仅替换第一个 `column`）
+     * 例如 COUNT(DISTINCT `code`) → COUNT(DISTINCT t0.`code`)
+     */
+    private String qualifyColumnRef(String expression, String alias) {
+        if (!StringUtils.hasText(expression) || !StringUtils.hasText(alias)) {
+            return expression;
+        }
+        return expression.replaceFirst("`", alias + ".`");
+    }
+
     private String buildSingleTableSql(List<MetricInfo> metricInfos, List<DimensionInfo> dimensionInfos,
                                        MetricBiAnalysisCmd cmd, String tableRef) {
         // 4. 构建 SELECT
@@ -225,6 +236,7 @@ public class BiAnalysisServiceImpl implements BiAnalysisService {
     private String buildJoinSql(List<MetricInfo> metrics, List<DimensionInfo> dimensions,
                                 List<TableRelationDTO> joins, MetricBiAnalysisCmd cmd, String factTableRef) {
         StringBuilder sql = new StringBuilder();
+        String factAlias = "t0";
 
         // SELECT
         sql.append("SELECT ");
@@ -239,12 +251,11 @@ public class BiAnalysisServiceImpl implements BiAnalysisService {
             }
         }
         for (MetricInfo metric : metrics) {
-            selectItems.add(metric.aggExpression + " AS `" + metric.alias + "`");
+            selectItems.add(qualifyColumnRef(metric.aggExpression, factAlias) + " AS `" + metric.alias + "`");
         }
         sql.append(String.join(", ", selectItems));
 
         // FROM
-        String factAlias = "t0";
         sql.append(" FROM ").append(factTableRef).append(" ").append(factAlias);
 
         // JOIN
@@ -272,7 +283,9 @@ public class BiAnalysisServiceImpl implements BiAnalysisService {
         Set<String> metricConditions = new LinkedHashSet<>();
         for (MetricInfo info : metrics) {
             if (info.filterConditions != null) {
-                metricConditions.addAll(info.filterConditions);
+                for (String condition : info.filterConditions) {
+                    metricConditions.add(qualifyColumnRef(condition, factAlias));
+                }
             }
         }
         List<String> conditions = new ArrayList<>(metricConditions);
@@ -459,6 +472,13 @@ public class BiAnalysisServiceImpl implements BiAnalysisService {
                 if (filter.getMetricCode().equals(info.metricCode)) {
                     // 从聚合表达式中提取字段名（如 SUM(`amount`) → `amount`）
                     column = extractColumnFromAgg(info.aggExpression);
+                    // JOIN 场景下加上事实表别名
+                    if (aliasMap != null && StringUtils.hasText(factTableRef)) {
+                        String factAlias = aliasMap.get(factTableRef);
+                        if (StringUtils.hasText(factAlias)) {
+                            column = factAlias + "." + column;
+                        }
+                    }
                     break;
                 }
             }
