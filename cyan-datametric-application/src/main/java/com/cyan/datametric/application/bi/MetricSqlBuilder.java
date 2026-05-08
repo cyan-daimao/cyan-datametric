@@ -9,7 +9,6 @@ import com.cyan.datametric.domain.config.TimePeriod;
 import com.cyan.datametric.domain.config.repository.DimensionRepository;
 import com.cyan.datametric.domain.metric.MetricAtomicExt;
 import com.cyan.datametric.enums.PeriodType;
-import com.cyan.datametric.enums.StatFunc;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
@@ -70,7 +69,7 @@ public class MetricSqlBuilder {
         if (!dimensionInfos.isEmpty()) {
             sql.append(" GROUP BY ").append(
                     dimensionInfos.stream()
-                            .map(DimensionInfo::columnName)
+                            .map(DimensionInfo::getColumnExpr)
                             .collect(Collectors.joining(", "))
             );
         }
@@ -191,7 +190,8 @@ public class MetricSqlBuilder {
             result.add(new DimensionInfo(
                     ref.getDimId(),
                     ref.getAlias() != null && !ref.getAlias().isBlank() ? ref.getAlias() : dimension.getDimName(),
-                    columnName
+                    columnName,
+                    dimension.getDisplayColumn()
             ));
         }
         return result;
@@ -216,7 +216,7 @@ public class MetricSqlBuilder {
                     // 尝试从仓库加载维度信息
                     Dimension dimension = dimensionRepository.findById(filter.getDimId());
                     Assert.notNull(dimension, new BusinessException(MetricBiErrorCode.DIMENSION_NOT_FOUND.getMessage()));
-                    dim = new DimensionInfo(filter.getDimId(), dimension.getDimName(), dimension.getColumnName());
+                    dim = new DimensionInfo(filter.getDimId(), dimension.getDimName(), dimension.getColumnName(), dimension.getDisplayColumn());
                 }
                 String condition = buildFilterCondition(dim.columnName(), filter.getOperator(), filter.getValues());
                 conditions.add(condition);
@@ -278,7 +278,7 @@ public class MetricSqlBuilder {
             } else if (order.getDimId() != null && !order.getDimId().isBlank()) {
                 DimensionInfo dim = dimMap.get(order.getDimId());
                 if (dim != null) {
-                    expr = dim.columnName();
+                    expr = dim.getColumnExpr();
                 }
             }
             if (expr != null) {
@@ -292,9 +292,9 @@ public class MetricSqlBuilder {
     /**
      * 维度信息内部类
      */
-    private record DimensionInfo(String dimId, String alias, String columnName) {
+    private record DimensionInfo(String dimId, String alias, String columnName, String displayColumn) {
         String getColumnExpr() {
-            return columnName;
+            return displayColumn != null && !displayColumn.isBlank() ? displayColumn : columnName;
         }
     }
 }

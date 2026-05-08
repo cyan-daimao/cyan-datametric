@@ -147,13 +147,17 @@ public class BiAnalysisServiceImpl implements BiAnalysisService {
         return buildJoinSql(metricInfos, dimensionInfos, joins, cmd, factTableRef);
     }
 
+    private String resolveSelectColumn(DimensionInfo dim) {
+        return StringUtils.hasText(dim.displayColumn) ? dim.displayColumn : dim.columnName;
+    }
+
     private String buildSingleTableSql(List<MetricInfo> metricInfos, List<DimensionInfo> dimensionInfos,
                                        MetricBiAnalysisCmd cmd, String tableRef) {
         // 4. 构建 SELECT
         List<String> selectCols = new ArrayList<>();
-        // 维度字段
+        // 维度字段（优先使用 displayColumn）
         for (DimensionInfo dim : dimensionInfos) {
-            selectCols.add(dim.columnName);
+            selectCols.add(resolveSelectColumn(dim));
         }
         // 指标聚合表达式
         for (MetricInfo info : metricInfos) {
@@ -191,7 +195,7 @@ public class BiAnalysisServiceImpl implements BiAnalysisService {
         // 6. 构建 GROUP BY
         if (!dimensionInfos.isEmpty()) {
             String groupBy = dimensionInfos.stream()
-                    .map(d -> d.columnName)
+                    .map(this::resolveSelectColumn)
                     .collect(Collectors.joining(", "));
             sql.append(" GROUP BY ").append(groupBy);
         }
@@ -226,11 +230,12 @@ public class BiAnalysisServiceImpl implements BiAnalysisService {
         sql.append("SELECT ");
         List<String> selectItems = new ArrayList<>();
         for (DimensionInfo dim : dimensions) {
+            String col = resolveSelectColumn(dim);
             if (StringUtils.hasText(dim.tableName) && !factTableRef.equals(dim.tableName)) {
                 String alias = getTableAlias(dim.tableName, joins, factTableRef);
-                selectItems.add(alias + "." + dim.columnName + " AS `" + dim.alias + "`");
+                selectItems.add(alias + "." + col + " AS `" + dim.alias + "`");
             } else {
-                selectItems.add(dim.columnName + " AS `" + dim.alias + "`");
+                selectItems.add(col + " AS `" + dim.alias + "`");
             }
         }
         for (MetricInfo metric : metrics) {
@@ -289,15 +294,16 @@ public class BiAnalysisServiceImpl implements BiAnalysisService {
         if (!dimensions.isEmpty()) {
             List<String> groupByCols = new ArrayList<>();
             for (DimensionInfo dim : dimensions) {
+                String col = resolveSelectColumn(dim);
                 if (StringUtils.hasText(dim.tableName) && !factTableRef.equals(dim.tableName)) {
                     String alias = aliasMap.get(dim.tableName);
                     if (StringUtils.hasText(alias)) {
-                        groupByCols.add(alias + "." + dim.columnName);
+                        groupByCols.add(alias + "." + col);
                     } else {
-                        groupByCols.add(dim.columnName);
+                        groupByCols.add(col);
                     }
                 } else {
-                    groupByCols.add(dim.columnName);
+                    groupByCols.add(col);
                 }
             }
             sql.append(" GROUP BY ").append(String.join(", ", groupByCols));
@@ -425,6 +431,9 @@ public class BiAnalysisServiceImpl implements BiAnalysisService {
         DimensionInfo info = new DimensionInfo();
         info.dimCode = dimCode;
         info.columnName = "`" + dim.getColumnName() + "`";
+        if (StringUtils.hasText(dim.getDisplayColumn())) {
+            info.displayColumn = "`" + dim.getDisplayColumn() + "`";
+        }
         info.alias = StringUtils.hasText(ref.getAlias()) ? ref.getAlias() : dim.getDimName();
         info.tableName = buildDimensionTableRef(dim.getSchemaName(), dim.getTableName());
         return info;
@@ -528,7 +537,7 @@ public class BiAnalysisServiceImpl implements BiAnalysisService {
         } else if (StringUtils.hasText(order.getDimCode())) {
             for (DimensionInfo dim : dimensionInfos) {
                 if (order.getDimCode().equals(dim.dimCode)) {
-                    String col = dim.columnName;
+                    String col = resolveSelectColumn(dim);
                     // 跨表时添加别名
                     if (StringUtils.hasText(factTableRef) && aliasMap != null
                             && StringUtils.hasText(dim.tableName) && !factTableRef.equals(dim.tableName)) {
@@ -588,6 +597,7 @@ public class BiAnalysisServiceImpl implements BiAnalysisService {
     private static class DimensionInfo {
         String dimCode;
         String columnName;
+        String displayColumn;
         String alias;
         String tableName;
     }
