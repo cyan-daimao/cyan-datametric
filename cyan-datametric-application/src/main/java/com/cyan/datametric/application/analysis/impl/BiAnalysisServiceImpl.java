@@ -241,7 +241,7 @@ public class BiAnalysisServiceImpl implements BiAnalysisService {
                 String alias = getTableAlias(dim.tableName, joins, factTableRef);
                 selectItems.add(alias + "." + col + " AS `" + dim.alias + "`");
             } else {
-                selectItems.add(col + " AS `" + dim.alias + "`");
+                selectItems.add(factAlias + "." + col + " AS `" + dim.alias + "`");
             }
         }
         for (MetricInfo metric : metrics) {
@@ -310,7 +310,7 @@ public class BiAnalysisServiceImpl implements BiAnalysisService {
                         groupByCols.add(col);
                     }
                 } else {
-                    groupByCols.add(col);
+                    groupByCols.add(factAlias + "." + col);
                 }
             }
             sql.append(" GROUP BY ").append(String.join(", ", groupByCols));
@@ -732,6 +732,10 @@ public class BiAnalysisServiceImpl implements BiAnalysisService {
                 continue;
             }
             String sourceColumn = group.dimKeyMap.get(dim.tableName);
+            // 事实表自带维度：直接用维度配置的 columnName（去掉反引号）
+            if (!StringUtils.hasText(sourceColumn) && group.tableRef.equals(dim.tableName)) {
+                sourceColumn = dim.columnName.replace("`", "");
+            }
             if (!StringUtils.hasText(sourceColumn)) {
                 continue;
             }
@@ -783,18 +787,32 @@ public class BiAnalysisServiceImpl implements BiAnalysisService {
         return cte.toString();
     }
 
+    private boolean hasDimKey(FactGroup group, int dimIndex, DimensionInfo dim) {
+        // 检查 CTE 是否实际生成了该维度的 dim_key
+        // 事实表自带维度时 dimKeyMap 可能为空，但 columnName 存在
+        if (group.tableRef.equals(dim.tableName)) {
+            return StringUtils.hasText(dim.columnName);
+        }
+        return StringUtils.hasText(group.dimKeyMap.get(dim.tableName));
+    }
+
     private String buildCteJoinSql(List<FactGroup> factGroups, List<DimensionInfo> dimensionInfos) {
         StringBuilder cte = new StringBuilder();
         cte.append("joined AS (\n    SELECT ");
 
         List<String> selectCols = new ArrayList<>();
 
-        // 维度键：COALESCE
+        // 维度键：COALESCE（只包含实际生成了 dim_key 的 CTE）
         for (int i = 0; i < dimensionInfos.size(); i++) {
             DimensionInfo dim = dimensionInfos.get(i);
             List<String> coalesceArgs = new ArrayList<>();
             for (FactGroup group : factGroups) {
-                coalesceArgs.add(group.cteAlias + ".dim_key_" + group.index + "_" + i);
+                if (hasDimKey(group, i, dim)) {
+                    coalesceArgs.add(group.cteAlias + ".dim_key_" + group.index + "_" + i);
+                }
+            }
+            if (coalesceArgs.isEmpty()) {
+                throw new BusinessException("维度 \"" + dim.alias + "\" 无法关联任何已选事实表");
             }
             selectCols.add("COALESCE(" + String.join(", ", coalesceArgs) + ") AS `" + dim.alias + "`");
         }
@@ -808,12 +826,24 @@ public class BiAnalysisServiceImpl implements BiAnalysisService {
 
         cte.append(String.join(", ", selectCols));
 
-        // FROM + FULL OUTER JOIN
+        // FROM + FULL OUTER JOIN（JOIN 条件只包含所有 CTE 都有的公共维度）
         cte.append("\n    FROM ").append(factGroups.getFirst().cteAlias);
         for (int i = 1; i < factGroups.size(); i++) {
             cte.append("\n    FULL OUTER JOIN ").append(factGroups.get(i).cteAlias).append(" ON ");
             List<String> joinConditions = new ArrayList<>();
             for (int d = 0; d < dimensionInfos.size(); d++) {
+                DimensionInfo dim = dimensionInfos.get(d);
+                // 只生成所有相关 CTE 都有的维度的 JOIN 条件
+                boolean allHave = true;
+                for (int k = 0; k <= i; k++) {
+                    if (!hasDimKey(factGroups.get(k), d, dim)) {
+                        allHave = false;
+                        break;
+                    }
+                }
+                if (!allHave) {
+                    continue;
+                }
                 String leftExpr;
                 if (i == 1) {
                     leftExpr = factGroups.getFirst().cteAlias + ".dim_key_" + factGroups.getFirst().index + "_" + d;
