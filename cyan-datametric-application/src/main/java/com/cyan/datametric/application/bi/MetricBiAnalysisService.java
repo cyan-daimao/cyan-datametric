@@ -3,6 +3,7 @@ package com.cyan.datametric.application.bi;
 import com.cyan.datametric.adapter.bi.http.dto.BiDimensionDTO;
 import com.cyan.datametric.adapter.bi.http.dto.BiMetricDTO;
 import com.cyan.datametric.adapter.bi.http.dto.ChartDataDTO;
+import com.cyan.datametric.adapter.bi.http.dto.DimensionValueDTO;
 import com.cyan.datametric.adapter.bi.http.dto.MetricBiAnalysisCmd;
 
 import java.util.List;
@@ -50,4 +51,12 @@ public interface MetricBiAnalysisService {
      * @return 简化维度列表
      */
     List<BiDimensionDTO> listDimensions(String name, String categoryId);
+
+    /**
+     * 查询维度可选值（BI用）
+     *
+     * @param dimCode 维度编码
+     * @return 维度值列表（value=物理字段值, label=显示字段值）
+     */
+    List<DimensionValueDTO> listDimensionValues(String dimCode);
 }

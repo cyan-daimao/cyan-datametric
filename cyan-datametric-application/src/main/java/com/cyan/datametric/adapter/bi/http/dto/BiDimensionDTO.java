@@ -49,6 +49,11 @@ public class BiDimensionDTO {
     private String columnName;
 
     /**
+     * 显示字段名（BI展示用）
+     */
+    private String displayColumn;
+
+    /**
      * 所属分类名称
      */
     private String categoryName;

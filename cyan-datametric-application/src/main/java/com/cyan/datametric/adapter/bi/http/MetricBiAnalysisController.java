@@ -3,6 +3,7 @@ package com.cyan.datametric.adapter.bi.http;
 import com.cyan.arch.common.api.Response;
 import com.cyan.datametric.adapter.bi.http.dto.BiDimensionDTO;
 import com.cyan.datametric.adapter.bi.http.dto.BiMetricDTO;
+import com.cyan.datametric.adapter.bi.http.dto.DimensionValueDTO;
 import com.cyan.datametric.application.bi.MetricBiAnalysisService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
@@ -44,6 +45,17 @@ public class MetricBiAnalysisController {
             @RequestParam(name = "name", required = false) String name,
             @RequestParam(name = "categoryId", required = false) String categoryId) {
         List<BiDimensionDTO> list = metricBiAnalysisService.listDimensions(name, categoryId);
+        return Response.success(list);
+    }
+
+    /**
+     * 维度可选值（BI用）
+     */
+    @GetMapping("/dimensions/{dimCode}/values")
+    // API: ready
+    public Response<List<DimensionValueDTO>> listDimensionValues(
+            @PathVariable("dimCode") String dimCode) {
+        List<DimensionValueDTO> list = metricBiAnalysisService.listDimensionValues(dimCode);
         return Response.success(list);
     }
 }

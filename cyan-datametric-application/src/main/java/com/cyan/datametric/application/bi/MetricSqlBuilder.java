@@ -106,7 +106,7 @@ public class MetricSqlBuilder {
 
         StringBuilder result = new StringBuilder();
         int lastEnd = 0;
-        java.util.regex.Matcher matcher = java.util.regex.Pattern.compile("\\$\\{([^}]+)\\}").matcher(formula);
+        java.util.regex.Matcher matcher = java.util.regex.Pattern.compile("\\$\\{([^}]+)}").matcher(formula);
         while (matcher.find()) {
             result.append(formula, lastEnd, matcher.start());
             String refId = matcher.group(1);
@@ -219,7 +219,9 @@ public class MetricSqlBuilder {
                     dim = new DimensionInfo(filter.getDimId(), dimension.getDimName(), dimension.getColumnName(), dimension.getDisplayColumn());
                 }
                 String condition = buildFilterCondition(dim.columnName(), filter.getOperator(), filter.getValues());
-                conditions.add(condition);
+                if (condition != null) {
+                    conditions.add(condition);
+                }
             }
             // 指标级过滤一期暂不处理
         }
@@ -228,26 +230,29 @@ public class MetricSqlBuilder {
     }
 
     private String buildFilterCondition(String column, String operator, List<String> values) {
+        if (values == null || values.isEmpty()) {
+            return null;
+        }
         return switch (operator.toUpperCase()) {
-            case "EQ" -> column + " = '" + values.get(0) + "'";
-            case "NE" -> column + " != '" + values.get(0) + "'";
-            case "GT" -> column + " > '" + values.get(0) + "'";
-            case "GTE" -> column + " >= '" + values.get(0) + "'";
-            case "LT" -> column + " < '" + values.get(0) + "'";
-            case "LTE" -> column + " <= '" + values.get(0) + "'";
+            case "EQ", "=" -> column + " = '" + values.getFirst().replace("'", "''") + "'";
+            case "NE", "!=" -> column + " != '" + values.getFirst().replace("'", "''") + "'";
+            case "GT", ">" -> column + " > '" + values.getFirst().replace("'", "''") + "'";
+            case "GTE", ">=" -> column + " >= '" + values.getFirst().replace("'", "''") + "'";
+            case "LT", "<" -> column + " < '" + values.getFirst().replace("'", "''") + "'";
+            case "LTE", "<=" -> column + " <= '" + values.getFirst().replace("'", "''") + "'";
             case "IN" -> {
-                String vals = values.stream().map(v -> "'" + v + "'").collect(Collectors.joining(","));
+                String vals = values.stream().map(v -> "'" + v.replace("'", "''") + "'").collect(Collectors.joining(","));
                 yield column + " IN (" + vals + ")";
             }
             case "NOT_IN" -> {
-                String vals = values.stream().map(v -> "'" + v + "'").collect(Collectors.joining(","));
+                String vals = values.stream().map(v -> "'" + v.replace("'", "''") + "'").collect(Collectors.joining(","));
                 yield column + " NOT IN (" + vals + ")";
             }
-            case "BETWEEN" -> column + " BETWEEN '" + values.get(0) + "' AND '" + values.get(1) + "'";
+            case "BETWEEN" -> column + " BETWEEN '" + values.get(0).replace("'", "''") + "' AND '" + values.get(1).replace("'", "''") + "'";
             case "IS_NULL" -> column + " IS NULL";
             case "IS_NOT_NULL" -> column + " IS NOT NULL";
-            case "LIKE" -> column + " LIKE '" + values.get(0) + "'";
-            case "NOT_LIKE" -> column + " NOT LIKE '" + values.get(0) + "'";
+            case "LIKE" -> column + " LIKE '%" + values.getFirst().replace("'", "''") + "%'";
+            case "NOT_LIKE" -> column + " NOT LIKE '%" + values.getFirst().replace("'", "''") + "%'";
             default -> throw new BusinessException("不支持的过滤操作符: " + operator);
         };
     }

@@ -1,5 +1,7 @@
 package com.cyan.datametric.application.bi.impl;
 
+import com.cyan.arch.common.api.Assert;
+import com.cyan.arch.common.api.BusinessException;
 import com.cyan.arch.common.api.Page;
 import com.cyan.datagateway.client.SqlGatewayClient;
 import com.cyan.datagateway.client.cmd.SqlExecuteCmd;
@@ -7,12 +9,15 @@ import com.cyan.datagateway.client.dto.SqlExecuteResultDTO;
 import com.cyan.datametric.adapter.bi.http.dto.BiDimensionDTO;
 import com.cyan.datametric.adapter.bi.http.dto.BiMetricDTO;
 import com.cyan.datametric.adapter.bi.http.dto.ChartDataDTO;
+import com.cyan.datametric.adapter.bi.http.dto.DimensionValueDTO;
 import com.cyan.datametric.adapter.bi.http.dto.MetricBiAnalysisCmd;
 import com.cyan.datametric.application.bi.MetricBiAnalysisService;
+import com.cyan.datametric.application.bi.MetricBiErrorCode;
 import com.cyan.datametric.application.bi.MetricResolver;
 import com.cyan.datametric.application.bi.MetricSqlBuilder;
 import com.cyan.datametric.application.bi.ResolvedMetric;
 import com.cyan.datametric.application.bi.TableConsistencyChecker;
+import com.cyan.datametric.domain.config.Dimension;
 import com.cyan.datametric.domain.config.query.DimensionPageQuery;
 import com.cyan.datametric.domain.config.repository.DimensionRepository;
 import com.cyan.datametric.domain.metric.dimension.category.DimensionCategory;
@@ -23,9 +28,12 @@ import com.cyan.datametric.domain.metric.subject.MetricSubject;
 import com.cyan.datametric.domain.metric.subject.repository.MetricSubjectRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
+import org.springframework.util.StringUtils;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -49,6 +57,9 @@ public class MetricBiAnalysisServiceImpl implements MetricBiAnalysisService {
     private final DimensionCategoryRepository dimensionCategoryRepository;
     private final MetricSubjectRepository metricSubjectRepository;
     private final SqlGatewayClient sqlGatewayClient;
+
+    @Value("${cyan.datametric.default-catalog:iceberg}")
+    private String defaultCatalog;
 
     @Override
     public ChartDataDTO execute(MetricBiAnalysisCmd cmd, String executor) {
@@ -80,7 +91,7 @@ public class MetricBiAnalysisServiceImpl implements MetricBiAnalysisService {
         if (result.getData() != null && !result.getData().isEmpty()) {
             dto.setRows(result.getData());
             // 从第一行数据提取列名
-            dto.setColumns(new ArrayList<>(result.getData().get(0).keySet()));
+            dto.setColumns(new ArrayList<>(result.getData().getFirst().keySet()));
         } else {
             dto.setColumns(new ArrayList<>());
             dto.setRows(new ArrayList<>());
@@ -166,19 +177,14 @@ public class MetricBiAnalysisServiceImpl implements MetricBiAnalysisService {
                 .filter(id -> id != null && !id.isBlank())
                 .distinct()
                 .toList();
-        Map<String, String> categoryNameMap;
+        Map<String, String> categoryNameMap = new HashMap<>();
         if (!categoryIds.isEmpty()) {
-            categoryNameMap = categoryIds.stream()
-                    .collect(Collectors.toMap(
-                            id -> id,
-                            id -> {
-                                DimensionCategory cat = dimensionCategoryRepository.findById(id);
-                                return cat != null ? cat.getName() : null;
-                            },
-                            (a, b) -> a
-                    ));
-        } else {
-            categoryNameMap = Map.of();
+            for (String id : categoryIds) {
+                DimensionCategory cat = dimensionCategoryRepository.findById(id);
+                if (cat != null && cat.getName() != null) {
+                    categoryNameMap.put(id, cat.getName());
+                }
+            }
         }
 
         return page.getData().stream()
@@ -191,9 +197,77 @@ public class MetricBiAnalysisServiceImpl implements MetricBiAnalysisService {
                     dto.setDataType(d.getDataType());
                     dto.setTableName(d.getTableName());
                     dto.setColumnName(d.getColumnName());
+                    dto.setDisplayColumn(d.getDisplayColumn());
                     dto.setCategoryName(categoryNameMap.get(d.getCategoryId()));
                     return dto;
                 })
                 .toList();
+    }
+
+    @Override
+    public List<DimensionValueDTO> listDimensionValues(String dimCode) {
+        Dimension dimension = dimensionRepository.findByDimCode(dimCode);
+        Assert.notNull(dimension, new BusinessException(MetricBiErrorCode.DIMENSION_NOT_FOUND.getMessage()));
+
+        String tableRef = buildDimensionTableRef(dimension.getSchemaName(), dimension.getTableName());
+        String columnName = dimension.getColumnName();
+        String displayColumn = dimension.getDisplayColumn();
+
+        Assert.notBlank(columnName, new BusinessException("维度 '" + dimCode + "' 未配置物理字段"));
+        Assert.notBlank(tableRef, new BusinessException("维度 '" + dimCode + "' 未配置维表"));
+
+        String sql;
+        if (StringUtils.hasText(displayColumn) && !displayColumn.equals(columnName)) {
+            sql = "SELECT DISTINCT `" + columnName + "` AS `value`, `" + displayColumn + "` AS `label` FROM " + tableRef + " LIMIT 1000";
+        } else {
+            sql = "SELECT DISTINCT `" + columnName + "` AS `value`, `" + columnName + "` AS `label` FROM " + tableRef + " LIMIT 1000";
+        }
+
+        SqlExecuteCmd executeCmd = new SqlExecuteCmd()
+                .setSql(sql)
+                .setPassport("system");
+
+        com.cyan.arch.common.api.Response<SqlExecuteResultDTO> response =
+                sqlGatewayClient.executeStarRocksSql(executeCmd);
+
+        if (response == null || response.getCode() != 200 || response.getData() == null || response.getData().getData() == null) {
+            log.warn("查询维度值失败: dimCode={}, message={}", dimCode, response != null ? response.getMessage() : "null");
+            return List.of();
+        }
+
+        return response.getData().getData().stream()
+                .map(row -> {
+                    Object value = row.get("value");
+                    Object label = row.get("label");
+                    return new DimensionValueDTO()
+                            .setValue(value != null ? value.toString() : null)
+                            .setLabel(label != null ? label.toString() : null);
+                })
+                .filter(d -> d.getValue() != null)
+                .toList();
+    }
+
+    private String buildDimensionTableRef(String schema, String tableName) {
+        if (!StringUtils.hasText(tableName)) {
+            return null;
+        }
+        if (tableName.contains(".")) {
+            return normalizeTableRef(tableName);
+        }
+        if (StringUtils.hasText(schema)) {
+            return normalizeTableRef(schema + "." + tableName);
+        }
+        return normalizeTableRef(tableName);
+    }
+
+    private String normalizeTableRef(String tableRef) {
+        if (!StringUtils.hasText(tableRef)) {
+            return tableRef;
+        }
+        String[] parts = tableRef.split("\\.");
+        if (parts.length == 2) {
+            return defaultCatalog + "." + tableRef;
+        }
+        return tableRef;
     }
 }
