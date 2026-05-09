@@ -1,0 +1,194 @@
+openapi: 3.0.0
+info:
+  title: ChatBI Metadata API
+  description: |
+    查询BI分析所需的元数据：指标列表、维度列表、维度可选值。
+    当用户提到不确定的指标/维度名称，或需要获取过滤值时调用。
+  version: 1.0.0
+servers:
+  - url: http://10.0.0.2:8080
+    description: cyan-datametric 服务
+paths:
+  /rpc/v1/metrics/bi/list:
+    get:
+      operationId: listMetrics
+      summary: 查询可用指标列表
+      description: |
+        获取所有可用于BI分析的指标列表。每个指标包含编码、名称、统计函数、来源表等信息。
+        当用户提到不确定的指标名称时，可先调用此接口查询匹配项。
+      parameters:
+        - name: name
+          in: query
+          schema:
+            type: string
+          description: 按指标名称模糊搜索（可选）
+          required: false
+        - name: subjectCode
+          in: query
+          schema:
+            type: string
+          description: 按主题域编码过滤（可选）
+          required: false
+        - name: metricType
+          in: query
+          schema:
+            type: string
+            enum: [ATOMIC, DERIVED, COMPOSITE]
+          description: 指标类型（ATOMIC=原子指标, DERIVED=衍生指标, COMPOSITE=复合指标）（可选）
+          required: false
+      responses:
+        '200':
+          description: 指标列表查询成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                    description: 响应码，200 表示成功
+                  message:
+                    type: string
+                  data:
+                    type: array
+                    description: 指标列表
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                          description: 指标ID
+                        metricCode:
+                          type: string
+                          description: 指标编码（DSL中引用）
+                        metricName:
+                          type: string
+                          description: 指标名称（展示用）
+                        metricType:
+                          type: string
+                          description: 指标类型
+                        subjectCode:
+                          type: string
+                          description: 所属主题域编码
+                        subjectName:
+                          type: string
+                          description: 所属主题域名称
+                        statFunc:
+                          type: string
+                          description: 统计函数（SUM/AVG/COUNT/COUNT_DISTINCT/MAX/MIN）
+                        dataType:
+                          type: string
+                          description: 数据类型
+                        description:
+                          type: string
+                          description: 指标描述/业务口径
+                        tableRef:
+                          type: string
+                          description: 来源表引用（如 iceberg.db.table）
+
+  /rpc/v1/metrics/bi/dimensions:
+    get:
+      operationId: listDimensions
+      summary: 查询可用维度列表
+      description: |
+        获取所有可用于BI分析的维度列表。每个维度包含编码、名称、关联维表、物理字段、显示字段等信息。
+        当用户提到不确定的维度名称时，可先调用此接口查询匹配项。
+      parameters:
+        - name: name
+          in: query
+          schema:
+            type: string
+          description: 按维度名称模糊搜索（可选）
+          required: false
+        - name: categoryId
+          in: query
+          schema:
+            type: string
+          description: 按分类ID过滤（可选）
+          required: false
+      responses:
+        '200':
+          description: 维度列表查询成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                  message:
+                    type: string
+                  data:
+                    type: array
+                    description: 维度列表
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                          description: 维度ID
+                        dimCode:
+                          type: string
+                          description: 维度编码（DSL中引用）
+                        dimName:
+                          type: string
+                          description: 维度名称（展示用）
+                        dimType:
+                          type: string
+                          description: 维度类型
+                        dataType:
+                          type: string
+                          description: 数据类型
+                        tableName:
+                          type: string
+                          description: 关联维表名
+                        columnName:
+                          type: string
+                          description: 物理字段名（用于过滤/关联）
+                        displayColumn:
+                          type: string
+                          description: 显示字段名（用于SELECT展示，如 code → name）
+                        categoryName:
+                          type: string
+                          description: 所属分类名称
+
+  /rpc/v1/metrics/bi/dimensions/{dimCode}/values:
+    get:
+      operationId: listDimensionValues
+      summary: 查询维度可选值
+      description: |
+        根据维度编码查询该维度的所有可选值。
+        返回值包含 value（物理字段值）和 label（显示字段值）。
+        例如维度"省份"可能返回 [{value:"BJ", label:"北京"}, {value:"SH", label:"上海"}...]。
+        当用户指定了具体过滤值（如"只看广东和北京"）时，先调用此接口确认准确的物理字段值。
+      parameters:
+        - name: dimCode
+          in: path
+          required: true
+          schema:
+            type: string
+          description: 维度编码（如 D_PROVINCE）
+      responses:
+        '200':
+          description: 维度值查询成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                  message:
+                    type: string
+                  data:
+                    type: array
+                    description: 维度可选值列表
+                    items:
+                      type: object
+                      properties:
+                        value:
+                          type: string
+                          description: 物理字段值（用于过滤条件 values）
+                        label:
+                          type: string
+                          description: 显示字段值（用于展示给用户）

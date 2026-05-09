@@ -1,9 +1,11 @@
 package com.cyan.datametric.adapter.analysis.http;
 
 import com.cyan.arch.common.api.Response;
+import com.cyan.datametric.adapter.bi.http.convert.MetricBiAnalysisAdapterConvert;
+import com.cyan.datametric.application.analysis.BiAnalysisService;
+import com.cyan.datametric.application.bi.bo.ChartDataBO;
 import com.cyan.datametric.client.dto.MetricBiAnalysisCmd;
 import com.cyan.datametric.client.dto.MetricBiChartDataDTO;
-import com.cyan.datametric.application.analysis.BiAnalysisService;
 import com.cyan.employee.login.filter.UserContextHolder;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -21,9 +23,12 @@ import org.springframework.web.bind.annotation.RestController;
 public class BiAnalysisController {
 
     private final BiAnalysisService biAnalysisService;
+    private final MetricBiAnalysisAdapterConvert metricBiAnalysisAdapterConvert;
 
-    public BiAnalysisController(BiAnalysisService biAnalysisService) {
+    public BiAnalysisController(BiAnalysisService biAnalysisService,
+                                MetricBiAnalysisAdapterConvert metricBiAnalysisAdapterConvert) {
         this.biAnalysisService = biAnalysisService;
+        this.metricBiAnalysisAdapterConvert = metricBiAnalysisAdapterConvert;
     }
 
     /**
@@ -32,8 +37,9 @@ public class BiAnalysisController {
     @PostMapping("/execute")
     public Response<MetricBiChartDataDTO> execute(@RequestBody MetricBiAnalysisCmd cmd) {
         String executor = UserContextHolder.getCurrentEmployee().getPassport();
-        MetricBiChartDataDTO result = biAnalysisService.execute(cmd, executor);
-        return Response.success(result);
+        ChartDataBO bo = biAnalysisService.execute(cmd, executor);
+        MetricBiChartDataDTO dto = metricBiAnalysisAdapterConvert.toMetricBiChartDataDTO(bo);
+        return Response.success(dto);
     }
 
     /**

@@ -2,7 +2,7 @@ package com.cyan.datametric.application.bi;
 
 import com.cyan.arch.common.api.Assert;
 import com.cyan.arch.common.api.BusinessException;
-import com.cyan.datametric.adapter.bi.http.dto.MetricBiAnalysisCmd;
+import com.cyan.datametric.client.dto.MetricBiAnalysisCmd;
 import com.cyan.datametric.domain.config.Dimension;
 import com.cyan.datametric.domain.config.Modifier;
 import com.cyan.datametric.domain.config.TimePeriod;
@@ -181,14 +181,14 @@ public class MetricSqlBuilder {
             return result;
         }
         for (MetricBiAnalysisCmd.DimensionRef ref : dimRefs) {
-            Dimension dimension = dimensionRepository.findById(ref.getDimId());
+            Dimension dimension = dimensionRepository.findByDimCode(ref.getDimCode());
             Assert.notNull(dimension, new BusinessException(MetricBiErrorCode.DIMENSION_NOT_FOUND.getMessage()));
             String columnName = dimension.getColumnName();
             Assert.notBlank(columnName, new BusinessException("维度未配置物理字段: " + dimension.getDimName()));
             // 一期不做维度表 JOIN，维度仅提供 columnName 用于 SELECT/GROUP BY
             // 维度的 tableName 是维度表元数据，不与事实表做一致性校验
             result.add(new DimensionInfo(
-                    ref.getDimId(),
+                    ref.getDimCode(),
                     ref.getAlias() != null && !ref.getAlias().isBlank() ? ref.getAlias() : dimension.getDimName(),
                     columnName,
                     dimension.getDisplayColumn()
@@ -210,13 +210,13 @@ public class MetricSqlBuilder {
                 .collect(Collectors.toMap(DimensionInfo::dimId, d -> d));
 
         for (MetricBiAnalysisCmd.FilterRef filter : filters) {
-            if (filter.getDimId() != null && !filter.getDimId().isBlank()) {
-                DimensionInfo dim = dimMap.get(filter.getDimId());
+            if (filter.getDimCode() != null && !filter.getDimCode().isBlank()) {
+                DimensionInfo dim = dimMap.get(filter.getDimCode());
                 if (dim == null) {
                     // 尝试从仓库加载维度信息
-                    Dimension dimension = dimensionRepository.findById(filter.getDimId());
+                    Dimension dimension = dimensionRepository.findByDimCode(filter.getDimCode());
                     Assert.notNull(dimension, new BusinessException(MetricBiErrorCode.DIMENSION_NOT_FOUND.getMessage()));
-                    dim = new DimensionInfo(filter.getDimId(), dimension.getDimName(), dimension.getColumnName(), dimension.getDisplayColumn());
+                    dim = new DimensionInfo(filter.getDimCode(), dimension.getDimName(), dimension.getColumnName(), dimension.getDisplayColumn());
                 }
                 String condition = buildFilterCondition(dim.columnName(), filter.getOperator(), filter.getValues());
                 if (condition != null) {
@@ -275,13 +275,13 @@ public class MetricSqlBuilder {
 
         for (MetricBiAnalysisCmd.OrderRef order : orders) {
             String expr = null;
-            if (order.getMetricId() != null && !order.getMetricId().isBlank()) {
-                ResolvedMetric metric = metricMap.get(order.getMetricId());
+            if (order.getMetricCode() != null && !order.getMetricCode().isBlank()) {
+                ResolvedMetric metric = metricMap.get(order.getMetricCode());
                 if (metric != null) {
                     expr = "`" + metric.getAlias() + "`";
                 }
-            } else if (order.getDimId() != null && !order.getDimId().isBlank()) {
-                DimensionInfo dim = dimMap.get(order.getDimId());
+            } else if (order.getDimCode() != null && !order.getDimCode().isBlank()) {
+                DimensionInfo dim = dimMap.get(order.getDimCode());
                 if (dim != null) {
                     expr = dim.getColumnExpr();
                 }

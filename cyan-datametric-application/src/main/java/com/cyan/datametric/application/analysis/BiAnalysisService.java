@@ -1,7 +1,7 @@
 package com.cyan.datametric.application.analysis;
 
+import com.cyan.datametric.application.bi.bo.ChartDataBO;
 import com.cyan.datametric.client.dto.MetricBiAnalysisCmd;
-import com.cyan.datametric.client.dto.MetricBiChartDataDTO;
 
 /**
  * 指标 BI 分析服务
@@ -18,7 +18,7 @@ public interface BiAnalysisService {
      * @param executor 执行人 passport
      * @return 分析结果
      */
-    MetricBiChartDataDTO execute(MetricBiAnalysisCmd cmd, String executor);
+    ChartDataBO execute(MetricBiAnalysisCmd cmd, String executor);
 
     /**
      * 预览 SQL（不执行）

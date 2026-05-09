@@ -1,10 +1,10 @@
 package com.cyan.datametric.application.bi;
 
-import com.cyan.datametric.adapter.bi.http.dto.BiDimensionDTO;
-import com.cyan.datametric.adapter.bi.http.dto.BiMetricDTO;
-import com.cyan.datametric.adapter.bi.http.dto.ChartDataDTO;
-import com.cyan.datametric.adapter.bi.http.dto.DimensionValueDTO;
-import com.cyan.datametric.adapter.bi.http.dto.MetricBiAnalysisCmd;
+import com.cyan.datametric.application.bi.bo.BiDimensionBO;
+import com.cyan.datametric.application.bi.bo.BiMetricBO;
+import com.cyan.datametric.application.bi.bo.ChartDataBO;
+import com.cyan.datametric.application.bi.bo.DimensionValueBO;
+import com.cyan.datametric.client.dto.MetricBiAnalysisCmd;
 
 import java.util.List;
 
@@ -23,7 +23,7 @@ public interface MetricBiAnalysisService {
      * @param executor 执行人
      * @return 图表数据
      */
-    ChartDataDTO execute(MetricBiAnalysisCmd cmd, String executor);
+    ChartDataBO execute(MetricBiAnalysisCmd cmd, String executor);
 
     /**
      * 预览SQL
@@ -41,7 +41,7 @@ public interface MetricBiAnalysisService {
      * @param metricType  指标类型
      * @return 简化指标列表
      */
-    List<BiMetricDTO> listMetrics(String name, String subjectCode, String metricType);
+    List<BiMetricBO> listMetrics(String name, String subjectCode, String metricType);
 
     /**
      * 查询维度列表（BI用）
@@ -50,7 +50,7 @@ public interface MetricBiAnalysisService {
      * @param categoryId 分类ID
      * @return 简化维度列表
      */
-    List<BiDimensionDTO> listDimensions(String name, String categoryId);
+    List<BiDimensionBO> listDimensions(String name, String categoryId);
 
     /**
      * 查询维度可选值（BI用）
@@ -58,5 +58,5 @@ public interface MetricBiAnalysisService {
      * @param dimCode 维度编码
      * @return 维度值列表（value=物理字段值, label=显示字段值）
      */
-    List<DimensionValueDTO> listDimensionValues(String dimCode);
+    List<DimensionValueBO> listDimensionValues(String dimCode);
 }

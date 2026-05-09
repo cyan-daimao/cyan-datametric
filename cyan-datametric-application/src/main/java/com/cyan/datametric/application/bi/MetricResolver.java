@@ -2,16 +2,13 @@ package com.cyan.datametric.application.bi;
 
 import com.cyan.arch.common.api.Assert;
 import com.cyan.arch.common.api.BusinessException;
-import com.cyan.datametric.adapter.bi.http.dto.MetricBiAnalysisCmd;
-import com.cyan.datametric.domain.config.Modifier;
-import com.cyan.datametric.domain.config.TimePeriod;
+import com.cyan.datametric.client.dto.MetricBiAnalysisCmd;
 import com.cyan.datametric.domain.config.repository.ModifierRepository;
 import com.cyan.datametric.domain.config.repository.TimePeriodRepository;
 import com.cyan.datametric.domain.metric.Metric;
 import com.cyan.datametric.domain.metric.MetricAtomicExt;
 import com.cyan.datametric.domain.metric.repository.MetricRepository;
 import com.cyan.datametric.enums.MetricStatus;
-import com.cyan.datametric.enums.MetricType;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
@@ -45,7 +42,7 @@ public class MetricResolver {
     public List<ResolvedMetric> resolve(List<MetricBiAnalysisCmd.MetricRef> metricRefs) {
         List<ResolvedMetric> result = new ArrayList<>();
         for (MetricBiAnalysisCmd.MetricRef ref : metricRefs) {
-            ResolvedMetric resolved = resolveMetric(ref.getMetricId(), ref.getAlias());
+            ResolvedMetric resolved = resolveMetric(ref.getMetricCode(), ref.getAlias());
             result.add(resolved);
         }
         return result;

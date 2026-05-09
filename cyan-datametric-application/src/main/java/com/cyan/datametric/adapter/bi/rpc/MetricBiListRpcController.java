@@ -1,72 +1,79 @@
-package com.cyan.datametric.adapter.bi.http;
+package com.cyan.datametric.adapter.bi.rpc;
 
 import com.cyan.arch.common.api.Response;
 import com.cyan.datametric.adapter.bi.http.convert.MetricBiAnalysisAdapterConvert;
-import com.cyan.datametric.adapter.bi.http.dto.BiDimensionDTO;
-import com.cyan.datametric.adapter.bi.http.dto.BiMetricDTO;
-import com.cyan.datametric.adapter.bi.http.dto.DimensionValueDTO;
 import com.cyan.datametric.application.bi.MetricBiAnalysisService;
 import com.cyan.datametric.application.bi.bo.BiDimensionBO;
 import com.cyan.datametric.application.bi.bo.BiMetricBO;
 import com.cyan.datametric.application.bi.bo.DimensionValueBO;
+import com.cyan.datametric.client.DimensionBiListItem;
+import com.cyan.datametric.client.DimensionValueItem;
+import com.cyan.datametric.client.MetricBiListItem;
 import lombok.RequiredArgsConstructor;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
 
 /**
- * 指标BI分析控制器
+ * 指标/维度列表 RPC 服务（供内部服务调用 / Dify 工具调用，无登录拦截器）
  *
  * @author cy.Y
  * @since 1.0.0
  */
 @RestController
-@RequestMapping("/api/v1/metrics/bi")
+@RequestMapping("/rpc/v1/metrics/bi")
 @RequiredArgsConstructor
-public class MetricBiAnalysisController {
+public class MetricBiListRpcController {
 
     private final MetricBiAnalysisService metricBiAnalysisService;
     private final MetricBiAnalysisAdapterConvert metricBiAnalysisAdapterConvert;
 
     /**
-     * 指标列表（BI用）
+     * 查询可用指标列表
      */
     @GetMapping("/list")
-    public Response<List<BiMetricDTO>> listMetrics(
+    public Response<List<MetricBiListItem>> listMetrics(
             @RequestParam(name = "name", required = false) String name,
             @RequestParam(name = "subjectCode", required = false) String subjectCode,
             @RequestParam(name = "metricType", required = false) String metricType) {
+
         List<BiMetricBO> bos = metricBiAnalysisService.listMetrics(name, subjectCode, metricType);
-        List<BiMetricDTO> dtos = bos.stream()
-                .map(metricBiAnalysisAdapterConvert::toBiMetricDTO)
+        List<MetricBiListItem> result = bos.stream()
+                .map(metricBiAnalysisAdapterConvert::toMetricBiListItem)
                 .toList();
-        return Response.success(dtos);
+        return Response.success(result);
     }
 
     /**
-     * 维度列表（BI用）
+     * 查询可用维度列表
      */
     @GetMapping("/dimensions")
-    public Response<List<BiDimensionDTO>> listDimensions(
+    public Response<List<DimensionBiListItem>> listDimensions(
             @RequestParam(name = "name", required = false) String name,
             @RequestParam(name = "categoryId", required = false) String categoryId) {
+
         List<BiDimensionBO> bos = metricBiAnalysisService.listDimensions(name, categoryId);
-        List<BiDimensionDTO> dtos = bos.stream()
-                .map(metricBiAnalysisAdapterConvert::toBiDimensionDTO)
+        List<DimensionBiListItem> result = bos.stream()
+                .map(metricBiAnalysisAdapterConvert::toDimensionBiListItem)
                 .toList();
-        return Response.success(dtos);
+        return Response.success(result);
     }
 
     /**
-     * 维度可选值（BI用）
+     * 查询维度可选值
      */
     @GetMapping("/dimensions/{dimCode}/values")
-    public Response<List<DimensionValueDTO>> listDimensionValues(
+    public Response<List<DimensionValueItem>> listDimensionValues(
             @PathVariable("dimCode") String dimCode) {
+
         List<DimensionValueBO> bos = metricBiAnalysisService.listDimensionValues(dimCode);
-        List<DimensionValueDTO> dtos = bos.stream()
-                .map(metricBiAnalysisAdapterConvert::toDimensionValueDTO)
+        List<DimensionValueItem> result = bos.stream()
+                .map(metricBiAnalysisAdapterConvert::toDimensionValueItem)
                 .toList();
-        return Response.success(dtos);
+        return Response.success(result);
     }
 }

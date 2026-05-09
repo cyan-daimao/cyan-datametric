@@ -1,0 +1,182 @@
+openapi: 3.0.0
+info:
+  title: ChatBI Analysis API
+  description: |
+    指标BI分析核心接口：执行分析（生成SQL并执行返回数据）或预览SQL（只生成SQL不执行）。
+    两个接口的入参结构完全相同，均为结构化DSL。
+  version: 1.0.0
+servers:
+  - url: http://10.0.0.2:8080
+    description: cyan-datametric 服务
+paths:
+  /rpc/v1/metrics/bi/analysis/execute:
+    post:
+      operationId: executeAnalysis
+      summary: 执行指标分析
+      description: |
+        核心分析执行接口。接收结构化DSL JSON，后端自动：
+        1. 解析指标/维度引用
+        2. 检查表一致性（单表或多表JOIN）
+        3. 生成SQL
+        4. 通过数据网关执行
+        5. 返回执行结果（列名+数据行）
+        当用户想看到实际数据/图表时调用此接口。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MetricBiAnalysisCmd'
+      responses:
+        '200':
+          description: 分析执行结果
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                  message:
+                    type: string
+                  data:
+                    type: object
+                    description: 图表数据
+                    properties:
+                      status:
+                        type: string
+                        enum: [SUCCESS, FAILED]
+                        description: 执行状态
+                      columns:
+                        type: array
+                        items:
+                          type: string
+                        description: 列名列表
+                      rows:
+                        type: array
+                        items:
+                          type: object
+                          additionalProperties: true
+                        description: 数据行（每行是列名到值的映射）
+                      sql:
+                        type: string
+                        description: 实际执行的SQL
+                      costTimeMs:
+                        type: integer
+                        description: 执行耗时（毫秒）
+                      errorMessage:
+                        type: string
+                        description: 错误信息（失败时）
+
+  /rpc/v1/metrics/bi/analysis/preview-sql:
+    post:
+      operationId: previewSql
+      summary: 预览SQL（不执行）
+      description: |
+        根据DSL生成并返回对应的SQL字符串，不实际执行查询。
+        用于让用户核对取数逻辑是否正确（过程可验证）。
+        当用户说"让我看看SQL"或"SQL怎么写的"时调用此接口。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MetricBiAnalysisCmd'
+      responses:
+        '200':
+          description: SQL预览结果
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                  message:
+                    type: string
+                  data:
+                    type: string
+                    description: 生成的SQL字符串
+
+components:
+  schemas:
+    MetricBiAnalysisCmd:
+      type: object
+      required:
+        - chartType
+        - metrics
+        - dimensions
+      properties:
+        chartType:
+          type: string
+          enum: [TABLE, BAR, LINE, AREA, PIE, SCATTER, NUMBER]
+          description: 图表类型
+        metrics:
+          type: array
+          description: 指标列表（至少1个）
+          items:
+            type: object
+            required:
+              - metricCode
+            properties:
+              metricCode:
+                type: string
+                description: 指标编码
+              alias:
+                type: string
+                description: 展示别名（可选，默认用指标名称）
+        dimensions:
+          type: array
+          description: 维度列表
+          items:
+            type: object
+            required:
+              - dimCode
+            properties:
+              dimCode:
+                type: string
+                description: 维度编码
+              alias:
+                type: string
+                description: 展示别名（可选，默认用维度名称）
+        filters:
+          type: array
+          description: 过滤条件（可选）
+          items:
+            type: object
+            properties:
+              metricCode:
+                type: string
+                description: 按指标过滤（与dimCode二选一）
+              dimCode:
+                type: string
+                description: 按维度过滤（与metricCode二选一）
+              operator:
+                type: string
+                enum: ['=', '!=', '>', '>=', '<', '<=', 'IN', 'LIKE', 'NOT_LIKE', 'BETWEEN', 'IS_NULL', 'IS_NOT_NULL']
+                description: 操作符
+              values:
+                type: array
+                items:
+                  type: string
+                description: 过滤值列表
+        orders:
+          type: array
+          description: 排序配置（可选）
+          items:
+            type: object
+            properties:
+              metricCode:
+                type: string
+                description: 按指标排序
+              dimCode:
+                type: string
+                description: 按维度排序
+              direction:
+                type: string
+                enum: [ASC, DESC]
+                description: 排序方向
+        limitValue:
+          type: integer
+          default: 1000
+          description: 返回条数限制（最大10000）
