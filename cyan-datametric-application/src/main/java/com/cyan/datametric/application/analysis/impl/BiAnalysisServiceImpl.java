@@ -2,8 +2,8 @@ package com.cyan.datametric.application.analysis.impl;
 
 import com.cyan.arch.common.api.BusinessException;
 import com.cyan.arch.common.api.Response;
-import com.cyan.datametric.adapter.analysis.http.dto.MetricBiAnalysisCmd;
-import com.cyan.datametric.adapter.analysis.http.dto.MetricBiChartDataDTO;
+import com.cyan.datametric.client.dto.MetricBiAnalysisCmd;
+import com.cyan.datametric.client.dto.MetricBiChartDataDTO;
 import com.cyan.datametric.application.analysis.BiAnalysisService;
 import com.cyan.datametric.domain.config.Dimension;
 import com.cyan.datametric.domain.config.repository.DimensionRepository;
@@ -98,13 +98,9 @@ public class BiAnalysisServiceImpl implements BiAnalysisService {
             metricInfos.add(resolveMetric(ref));
         }
 
-        // 2. 校验：所有指标必须来自同一张表
-        String factTableRef = metricInfos.getFirst().tableRef;
-        for (MetricInfo info : metricInfos) {
-            if (!factTableRef.equals(info.tableRef)) {
-                throw new BusinessException("暂不支持多事实表关联分析");
-            }
-        }
+        // 2. 按事实表分组
+        Map<String, List<MetricInfo>> factGroups = metricInfos.stream()
+                .collect(Collectors.groupingBy(m -> m.tableRef));
 
         // 3. 解析维度
         List<DimensionInfo> dimensionInfos = new ArrayList<>();
@@ -114,37 +110,35 @@ public class BiAnalysisServiceImpl implements BiAnalysisService {
             }
         }
 
-        // 4. 收集需要 JOIN 的维度表
-        Set<String> dimTableRefs = new HashSet<>();
-        for (DimensionInfo dim : dimensionInfos) {
-            if (StringUtils.hasText(dim.tableName) && !factTableRef.equals(dim.tableName)) {
-                dimTableRefs.add(dim.tableName);
+        // 4. 路由：单事实表走存量逻辑，多事实表走新增逻辑
+        if (factGroups.size() == 1) {
+            String factTableRef = factGroups.keySet().iterator().next();
+            Set<String> dimTableRefs = new HashSet<>();
+            for (DimensionInfo dim : dimensionInfos) {
+                if (StringUtils.hasText(dim.tableName) && !factTableRef.equals(dim.tableName)) {
+                    dimTableRefs.add(dim.tableName);
+                }
             }
+            if (dimTableRefs.isEmpty()) {
+                return buildSingleTableSql(metricInfos, dimensionInfos, cmd, factTableRef);
+            }
+            String[] factParts = factTableRef.split("\\.");
+            List<String> dimTableRefList = new ArrayList<>(dimTableRefs);
+            List<TableRelationDTO> joins = tableRelationClient.findJoinPaths(
+                    factParts[0], factParts[1], factParts[2], dimTableRefList);
+            if (joins == null || joins.isEmpty()) {
+                DimensionInfo firstDim = dimensionInfos.stream()
+                        .filter(d -> StringUtils.hasText(d.tableName) && !factTableRef.equals(d.tableName))
+                        .findFirst()
+                        .orElse(null);
+                String dimName = firstDim != null ? firstDim.alias : "维度";
+                throw new BusinessException("维度 '" + dimName + "' 所在表与指标事实表 '" + factTableRef
+                        + "' 之间未配置关联关系，请在元数据平台的表详情页配置。");
+            }
+            return buildJoinSql(metricInfos, dimensionInfos, joins, cmd, factTableRef);
+        } else {
+            return buildMultiFactSql(factGroups, dimensionInfos, cmd);
         }
-
-        // 5. 单表直接生成（兼容存量）
-        if (dimTableRefs.isEmpty()) {
-            return buildSingleTableSql(metricInfos, dimensionInfos, cmd, factTableRef);
-        }
-
-        // 6. 跨表：查询 JOIN 关系
-        String[] factParts = factTableRef.split("\\.");
-        List<String> dimTableRefList = new ArrayList<>(dimTableRefs);
-        List<TableRelationDTO> joins = tableRelationClient.findJoinPaths(
-                factParts[0], factParts[1], factParts[2], dimTableRefList);
-
-        if (joins == null || joins.isEmpty()) {
-            DimensionInfo firstDim = dimensionInfos.stream()
-                    .filter(d -> StringUtils.hasText(d.tableName) && !factTableRef.equals(d.tableName))
-                    .findFirst()
-                    .orElse(null);
-            String dimName = firstDim != null ? firstDim.alias : "维度";
-            throw new BusinessException("维度 '" + dimName + "' 所在表与指标事实表 '" + factTableRef
-                    + "' 之间未配置关联关系，请在元数据平台的表详情页配置。");
-        }
-
-        // 7. 生成带 JOIN 的 SQL
-        return buildJoinSql(metricInfos, dimensionInfos, joins, cmd, factTableRef);
     }
 
     private String resolveSelectColumn(DimensionInfo dim) {
@@ -247,7 +241,7 @@ public class BiAnalysisServiceImpl implements BiAnalysisService {
                 String alias = getTableAlias(dim.tableName, joins, factTableRef);
                 selectItems.add(alias + "." + col + " AS `" + dim.alias + "`");
             } else {
-                selectItems.add(col + " AS `" + dim.alias + "`");
+                selectItems.add(factAlias + "." + col + " AS `" + dim.alias + "`");
             }
         }
         for (MetricInfo metric : metrics) {
@@ -316,7 +310,7 @@ public class BiAnalysisServiceImpl implements BiAnalysisService {
                         groupByCols.add(col);
                     }
                 } else {
-                    groupByCols.add(col);
+                    groupByCols.add(factAlias + "." + col);
                 }
             }
             sql.append(" GROUP BY ").append(String.join(", ", groupByCols));
@@ -487,8 +481,8 @@ public class BiAnalysisServiceImpl implements BiAnalysisService {
                 if (filter.getDimCode().equals(dim.dimCode)) {
                     column = dim.columnName;
                     // 跨表时添加别名
-                    if (StringUtils.hasText(factTableRef) && aliasMap != null
-                            && StringUtils.hasText(dim.tableName) && !factTableRef.equals(dim.tableName)) {
+                    if (aliasMap != null && StringUtils.hasText(dim.tableName)
+                            && (!StringUtils.hasText(factTableRef) || !factTableRef.equals(dim.tableName))) {
                         String alias = aliasMap.get(dim.tableName);
                         if (StringUtils.hasText(alias)) {
                             column = alias + "." + column;
@@ -559,8 +553,8 @@ public class BiAnalysisServiceImpl implements BiAnalysisService {
                 if (order.getDimCode().equals(dim.dimCode)) {
                     String col = resolveSelectColumn(dim);
                     // 跨表时添加别名
-                    if (StringUtils.hasText(factTableRef) && aliasMap != null
-                            && StringUtils.hasText(dim.tableName) && !factTableRef.equals(dim.tableName)) {
+                    if (aliasMap != null && StringUtils.hasText(dim.tableName)
+                            && (!StringUtils.hasText(factTableRef) || !factTableRef.equals(dim.tableName))) {
                         String alias = aliasMap.get(dim.tableName);
                         if (StringUtils.hasText(alias)) {
                             col = alias + "." + col;
@@ -612,6 +606,389 @@ public class BiAnalysisServiceImpl implements BiAnalysisService {
                     "表引用格式错误，期望 schema.table 或 catalog.schema.table，实际: " + tableRef);
         }
         return tableRef;
+    }
+
+    // ==================== 多事实表关联分析（方案A：CTE + FULL OUTER JOIN）====================
+
+    private static class FactGroup {
+        /** 事实表全名：catalog.schema.table */
+        String tableRef;
+        /** CTE 别名：如 fact_0_agg */
+        String cteAlias;
+        /** 索引，用于生成 dim_key 别名 */
+        int index;
+        /** 该事实表上的指标列表 */
+        List<MetricInfo> metrics;
+        /** 事实表到各维度表的外键映射：dimTableRef -> sourceColumn */
+        Map<String, String> dimKeyMap = new HashMap<>();
+        /** 事实表到各维度表的目标字段映射：dimTableRef -> targetColumn */
+        Map<String, String> dimTargetColumnMap = new HashMap<>();
+    }
+
+    private String buildMultiFactSql(Map<String, List<MetricInfo>> factGroupMap,
+                                      List<DimensionInfo> dimensionInfos,
+                                      MetricBiAnalysisCmd cmd) {
+        // 0. 校验：多事实表分析要求所有维度必须配置维度表
+        for (DimensionInfo dim : dimensionInfos) {
+            if (!StringUtils.hasText(dim.tableName)) {
+                throw new BusinessException("多事实表关联分析要求所有维度必须配置关联维度表");
+            }
+        }
+
+        // 1. 构建 FactGroup 列表
+        List<FactGroup> factGroups = new ArrayList<>();
+        int idx = 0;
+        for (Map.Entry<String, List<MetricInfo>> entry : factGroupMap.entrySet()) {
+            FactGroup group = new FactGroup();
+            group.tableRef = entry.getKey();
+            group.index = idx;
+            group.cteAlias = "fact_" + idx + "_agg";
+            group.metrics = entry.getValue();
+            factGroups.add(group);
+            idx++;
+        }
+
+        // 2. 查询维度外键关系
+        queryFactDimRelations(factGroups, dimensionInfos);
+
+        // 3. 校验维度外键覆盖
+        validateDimKeyCoverage(factGroups, dimensionInfos);
+
+        // 4. 构建 WITH 子句（各事实表 CTE）
+        StringBuilder sql = new StringBuilder();
+        sql.append("WITH ");
+        for (int i = 0; i < factGroups.size(); i++) {
+            if (i > 0) {
+                sql.append(",\n");
+            }
+            sql.append(buildFactCteSql(factGroups.get(i), dimensionInfos, cmd));
+        }
+
+        // 5. 构建 joined CTE（FULL OUTER JOIN）
+        sql.append(",\n").append(buildCteJoinSql(factGroups, dimensionInfos));
+
+        // 6. 构建最终 SELECT + 维度表 LEFT JOIN
+        sql.append("\n").append(buildFinalSelectSql(factGroups, dimensionInfos, cmd));
+
+        return sql.toString();
+    }
+
+    private void queryFactDimRelations(List<FactGroup> factGroups, List<DimensionInfo> dimensionInfos) {
+        Set<String> dimTableRefs = dimensionInfos.stream()
+                .map(d -> d.tableName)
+                .filter(StringUtils::hasText)
+                .collect(Collectors.toSet());
+
+        if (dimTableRefs.isEmpty()) {
+            return;
+        }
+
+        List<String> dimTableRefList = new ArrayList<>(dimTableRefs);
+        for (FactGroup group : factGroups) {
+            String[] parts = group.tableRef.split("\\.");
+            List<TableRelationDTO> relations = tableRelationClient.findJoinPaths(
+                    parts[0], parts[1], parts[2], dimTableRefList);
+            if (relations != null) {
+                for (TableRelationDTO rel : relations) {
+                    String dimTable = rel.getTargetCatalog() + "." + rel.getTargetSchema() + "." + rel.getTargetTable();
+                    group.dimKeyMap.put(dimTable, rel.getSourceColumn());
+                    group.dimTargetColumnMap.put(dimTable, rel.getTargetColumn());
+                }
+            }
+        }
+    }
+
+    private void validateDimKeyCoverage(List<FactGroup> factGroups, List<DimensionInfo> dimensionInfos) {
+        for (FactGroup group : factGroups) {
+            for (DimensionInfo dim : dimensionInfos) {
+                if (!StringUtils.hasText(dim.tableName)) {
+                    continue;
+                }
+                // 维度表与事实表相同（事实表自带维度），无需外键关系
+                if (group.tableRef.equals(dim.tableName)) {
+                    continue;
+                }
+                if (!group.dimKeyMap.containsKey(dim.tableName)) {
+                    throw new BusinessException(
+                            "事实表 \"" + group.tableRef + "\" 未配置到维度表 \"" + dim.tableName
+                                    + "\" 的关联关系，请到【元数据平台-表关系管理】中配置关联后再试。");
+                }
+            }
+        }
+    }
+
+    private String buildFactCteSql(FactGroup group, List<DimensionInfo> dimensionInfos,
+                                    MetricBiAnalysisCmd cmd) {
+        StringBuilder cte = new StringBuilder();
+        cte.append(group.cteAlias).append(" AS (\n    SELECT ");
+
+        List<String> selectCols = new ArrayList<>();
+        List<String> groupByCols = new ArrayList<>();
+
+        // 维度字段
+        for (int i = 0; i < dimensionInfos.size(); i++) {
+            DimensionInfo dim = dimensionInfos.get(i);
+            if (!StringUtils.hasText(dim.tableName)) {
+                continue;
+            }
+            String sourceColumn = group.dimKeyMap.get(dim.tableName);
+            // 事实表自带维度：直接用维度配置的 columnName（去掉反引号）
+            if (!StringUtils.hasText(sourceColumn) && group.tableRef.equals(dim.tableName)) {
+                sourceColumn = dim.columnName.replace("`", "");
+            }
+            if (!StringUtils.hasText(sourceColumn)) {
+                continue;
+            }
+            String dimKeyAlias = "dim_key_" + group.index + "_" + i;
+            selectCols.add("`" + sourceColumn + "` AS " + dimKeyAlias);
+            groupByCols.add("`" + sourceColumn + "`");
+        }
+
+        // 指标字段
+        for (MetricInfo metric : group.metrics) {
+            selectCols.add(metric.aggExpression + " AS `" + metric.alias + "`");
+        }
+
+        cte.append(String.join(", ", selectCols));
+        cte.append("\n    FROM ").append(group.tableRef);
+
+        // WHERE 条件（指标固有过滤 + 用户指标级过滤）
+        List<String> conditions = new ArrayList<>();
+
+        // 指标固有过滤
+        for (MetricInfo metric : group.metrics) {
+            if (metric.filterConditions != null) {
+                conditions.addAll(metric.filterConditions);
+            }
+        }
+
+        // 用户指标级过滤
+        if (!CollectionUtils.isEmpty(cmd.getFilters())) {
+            for (MetricBiAnalysisCmd.FilterRef filter : cmd.getFilters()) {
+                if (StringUtils.hasText(filter.getMetricCode())) {
+                    String condition = buildFilterCondition(filter, group.metrics, dimensionInfos, null, null);
+                    if (StringUtils.hasText(condition)) {
+                        conditions.add(condition);
+                    }
+                }
+            }
+        }
+
+        if (!conditions.isEmpty()) {
+            cte.append("\n    WHERE ").append(String.join(" AND ", conditions));
+        }
+
+        // GROUP BY
+        if (!groupByCols.isEmpty()) {
+            cte.append("\n    GROUP BY ").append(String.join(", ", groupByCols));
+        }
+
+        cte.append("\n)");
+        return cte.toString();
+    }
+
+    private boolean hasDimKey(FactGroup group, int dimIndex, DimensionInfo dim) {
+        // 检查 CTE 是否实际生成了该维度的 dim_key
+        // 事实表自带维度时 dimKeyMap 可能为空，但 columnName 存在
+        if (group.tableRef.equals(dim.tableName)) {
+            return StringUtils.hasText(dim.columnName);
+        }
+        return StringUtils.hasText(group.dimKeyMap.get(dim.tableName));
+    }
+
+    private String buildCteJoinSql(List<FactGroup> factGroups, List<DimensionInfo> dimensionInfos) {
+        StringBuilder cte = new StringBuilder();
+        cte.append("joined AS (\n    SELECT ");
+
+        List<String> selectCols = new ArrayList<>();
+
+        // 维度键：COALESCE（只包含实际生成了 dim_key 的 CTE）
+        for (int i = 0; i < dimensionInfos.size(); i++) {
+            DimensionInfo dim = dimensionInfos.get(i);
+            List<String> coalesceArgs = new ArrayList<>();
+            for (FactGroup group : factGroups) {
+                if (hasDimKey(group, i, dim)) {
+                    coalesceArgs.add(group.cteAlias + ".dim_key_" + group.index + "_" + i);
+                }
+            }
+            if (coalesceArgs.isEmpty()) {
+                throw new BusinessException("维度 \"" + dim.alias + "\" 无法关联任何已选事实表");
+            }
+            selectCols.add("COALESCE(" + String.join(", ", coalesceArgs) + ") AS `" + dim.alias + "`");
+        }
+
+        // 指标字段
+        for (FactGroup group : factGroups) {
+            for (MetricInfo metric : group.metrics) {
+                selectCols.add(group.cteAlias + ".`" + metric.alias + "`");
+            }
+        }
+
+        cte.append(String.join(", ", selectCols));
+
+        // FROM + FULL OUTER JOIN（JOIN 条件只包含所有 CTE 都有的公共维度）
+        cte.append("\n    FROM ").append(factGroups.getFirst().cteAlias);
+        for (int i = 1; i < factGroups.size(); i++) {
+            cte.append("\n    FULL OUTER JOIN ").append(factGroups.get(i).cteAlias).append(" ON ");
+            List<String> joinConditions = new ArrayList<>();
+            for (int d = 0; d < dimensionInfos.size(); d++) {
+                DimensionInfo dim = dimensionInfos.get(d);
+                // 只生成所有相关 CTE 都有的维度的 JOIN 条件
+                boolean allHave = true;
+                for (int k = 0; k <= i; k++) {
+                    if (!hasDimKey(factGroups.get(k), d, dim)) {
+                        allHave = false;
+                        break;
+                    }
+                }
+                if (!allHave) {
+                    continue;
+                }
+                String leftExpr;
+                if (i == 1) {
+                    leftExpr = factGroups.getFirst().cteAlias + ".dim_key_" + factGroups.getFirst().index + "_" + d;
+                } else {
+                    StringBuilder coalesce = new StringBuilder("COALESCE(");
+                    List<String> args = new ArrayList<>();
+                    for (int j = 0; j < i; j++) {
+                        args.add(factGroups.get(j).cteAlias + ".dim_key_" + factGroups.get(j).index + "_" + d);
+                    }
+                    coalesce.append(String.join(", ", args)).append(")");
+                    leftExpr = coalesce.toString();
+                }
+                String rightExpr = factGroups.get(i).cteAlias + ".dim_key_" + factGroups.get(i).index + "_" + d;
+                joinConditions.add(leftExpr + " = " + rightExpr);
+            }
+            if (joinConditions.isEmpty()) {
+                joinConditions.add("1 = 1");
+            }
+            cte.append(String.join(" AND ", joinConditions));
+        }
+
+        cte.append("\n)");
+        return cte.toString();
+    }
+
+    private String buildFinalSelectSql(List<FactGroup> factGroups, List<DimensionInfo> dimensionInfos,
+                                        MetricBiAnalysisCmd cmd) {
+        StringBuilder sql = new StringBuilder();
+
+        // SELECT
+        List<String> selectItems = new ArrayList<>();
+
+        // 维度显示字段（按维度表去重分配别名）
+        Map<String, String> dimAliasMap = new HashMap<>();
+        int dimAliasIdx = 0;
+        for (DimensionInfo dim : dimensionInfos) {
+            String dimAlias = dimAliasMap.get(dim.tableName);
+            if (dimAlias == null) {
+                dimAlias = "d" + dimAliasIdx++;
+                dimAliasMap.put(dim.tableName, dimAlias);
+            }
+            String col = resolveSelectColumn(dim);
+            selectItems.add(dimAlias + "." + col + " AS `" + dim.alias + "`");
+        }
+
+        // 指标字段
+        for (FactGroup group : factGroups) {
+            for (MetricInfo metric : group.metrics) {
+                selectItems.add("j.`" + metric.alias + "`");
+            }
+        }
+
+        sql.append("SELECT ").append(String.join(", ", selectItems));
+        sql.append("\nFROM joined j");
+
+        // LEFT JOIN 维度表（同一维度表只 JOIN 一次）
+        Set<String> joinedDimTables = new HashSet<>();
+        for (DimensionInfo dim : dimensionInfos) {
+            if (!StringUtils.hasText(dim.tableName)) {
+                continue;
+            }
+            if (!joinedDimTables.add(dim.tableName)) {
+                continue; // 已 JOIN 过，跳过
+            }
+            String dimAlias = dimAliasMap.get(dim.tableName);
+            String targetColumn = null;
+            for (FactGroup group : factGroups) {
+                if (group.tableRef.equals(dim.tableName)) {
+                    // 事实表自带维度，使用事实表上的外键字段
+                    targetColumn = group.dimKeyMap.get(dim.tableName);
+                } else {
+                    targetColumn = group.dimTargetColumnMap.get(dim.tableName);
+                }
+                if (StringUtils.hasText(targetColumn)) {
+                    break;
+                }
+            }
+            if (!StringUtils.hasText(targetColumn)) {
+                continue;
+            }
+            sql.append("\nLEFT JOIN ").append(dim.tableName).append(" ").append(dimAlias)
+                    .append(" ON j.`").append(dim.alias).append("` = ")
+                    .append(dimAlias).append(".`").append(targetColumn).append("`");
+        }
+
+        // WHERE 维度级过滤
+        List<String> conditions = new ArrayList<>();
+        if (!CollectionUtils.isEmpty(cmd.getFilters())) {
+            for (MetricBiAnalysisCmd.FilterRef filter : cmd.getFilters()) {
+                if (StringUtils.hasText(filter.getDimCode())) {
+                    String condition = buildFilterCondition(filter, List.of(), dimensionInfos, null, dimAliasMap);
+                    if (StringUtils.hasText(condition)) {
+                        conditions.add(condition);
+                    }
+                }
+            }
+        }
+
+        if (!conditions.isEmpty()) {
+            sql.append("\nWHERE ").append(String.join(" AND ", conditions));
+        }
+
+        // ORDER BY
+        if (!CollectionUtils.isEmpty(cmd.getOrders())) {
+            List<String> orderParts = new ArrayList<>();
+            for (MetricBiAnalysisCmd.OrderRef order : cmd.getOrders()) {
+                String orderCol = null;
+                if (StringUtils.hasText(order.getMetricCode())) {
+                    outer:
+                    for (FactGroup group : factGroups) {
+                        for (MetricInfo info : group.metrics) {
+                            if (order.getMetricCode().equals(info.metricCode)) {
+                                orderCol = "j.`" + info.alias + "`";
+                                break outer;
+                            }
+                        }
+                    }
+                } else if (StringUtils.hasText(order.getDimCode())) {
+                    for (DimensionInfo dim : dimensionInfos) {
+                        if (order.getDimCode().equals(dim.dimCode)) {
+                            String alias = dimAliasMap.get(dim.tableName);
+                            if (StringUtils.hasText(alias)) {
+                                orderCol = alias + "." + resolveSelectColumn(dim);
+                            } else {
+                                orderCol = resolveSelectColumn(dim);
+                            }
+                            break;
+                        }
+                    }
+                }
+                if (StringUtils.hasText(orderCol)) {
+                    orderParts.add(orderCol + " " + order.getDirection());
+                }
+            }
+            if (!orderParts.isEmpty()) {
+                sql.append("\nORDER BY ").append(String.join(", ", orderParts));
+            }
+        }
+
+        // LIMIT
+        if (cmd.getLimitValue() != null && cmd.getLimitValue() > 0) {
+            sql.append("\nLIMIT ").append(cmd.getLimitValue());
+        }
+
+        return sql.toString();
     }
 
     private static class DimensionInfo {

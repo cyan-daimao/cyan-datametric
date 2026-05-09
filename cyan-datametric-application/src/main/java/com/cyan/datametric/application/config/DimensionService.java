@@ -14,6 +14,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
+import com.cyan.arch.common.api.Assert;
+import com.cyan.arch.common.api.BusinessException;
 
 /**
  * 公共维度服务
@@ -27,39 +29,40 @@ public class DimensionService {
 
     private final DimensionRepository dimensionRepository;
     private final DimensionCategoryRepository dimensionCategoryRepository;
+    private final ConfigAppConvert configAppConvert;
 
 
     public DimensionBO create(DimensionCmd cmd) {
         if (cmd.getDimCode() == null || cmd.getDimCode().isBlank()) {
             cmd.setDimCode("DIM" + SnowflakeIdUtil.nextId());
         }
-        Dimension dimension = ConfigAppConvert.INSTANCE.toDimension(cmd);
+        Dimension dimension = configAppConvert.toDimension(cmd);
         dimension = dimension.save(dimensionRepository);
-        DimensionBO bo = ConfigAppConvert.INSTANCE.toDimensionBO(dimension);
+        DimensionBO bo = configAppConvert.toDimensionBO(dimension);
         assembleCategoryName(bo);
         return bo;
     }
 
     public DimensionBO update(String id, DimensionCmd cmd) {
         Dimension existing = dimensionRepository.findById(id);
-        Dimension dimension = ConfigAppConvert.INSTANCE.toDimension(cmd);
+        Dimension dimension = configAppConvert.toDimension(cmd);
         dimension.setId(id);
         dimension.setDimCode(existing.getDimCode());
         dimension = dimension.update(dimensionRepository);
-        DimensionBO bo = ConfigAppConvert.INSTANCE.toDimensionBO(dimension);
+        DimensionBO bo = configAppConvert.toDimensionBO(dimension);
         assembleCategoryName(bo);
         return bo;
     }
 
     public void delete(String id) {
-        Dimension dimension = new Dimension();
-        dimension.setId(id);
+        Dimension dimension = dimensionRepository.findById(id);
+        Assert.notNull(dimension, new BusinessException("维度不存在"));
         dimension.delete(dimensionRepository);
     }
 
     public DimensionBO detail(String id) {
         Dimension dimension = dimensionRepository.findById(id);
-        DimensionBO bo = ConfigAppConvert.INSTANCE.toDimensionBO(dimension);
+        DimensionBO bo = configAppConvert.toDimensionBO(dimension);
         assembleCategoryName(bo);
         assembleTableName(bo);
         return bo;
@@ -68,7 +71,7 @@ public class DimensionService {
     public Page<DimensionBO> page(DimensionPageQuery query) {
         Page<Dimension> page = dimensionRepository.page(query);
         List<DimensionBO> list = page.getData().stream()
-                .map(ConfigAppConvert.INSTANCE::toDimensionBO)
+                .map(configAppConvert::toDimensionBO)
                 .peek(this::assembleCategoryName)
                 .peek(this::assembleTableName)
                 .toList();

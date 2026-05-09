@@ -2,7 +2,6 @@ package com.cyan.datametric.infra.persistence.metric.subject.repository;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
-import com.cyan.arch.common.api.Pageable;
 import com.cyan.datametric.domain.metric.subject.MetricSubject;
 import com.cyan.datametric.domain.metric.subject.query.MetricSubjectQuery;
 import com.cyan.datametric.domain.metric.subject.repository.MetricSubjectRepository;
@@ -15,6 +14,7 @@ import org.springframework.stereotype.Repository;
 
 import java.util.List;
 import java.util.Optional;
+import lombok.RequiredArgsConstructor;
 
 /**
  * 指标主题域仓储实现
@@ -23,18 +23,17 @@ import java.util.Optional;
  * @since 1.0.0
  */
 @Repository
+@RequiredArgsConstructor
 public class MetricSubjectRepositoryImpl implements MetricSubjectRepository {
 
     private final MetricSubjectMapper subjectMapper;
+    private final MetricSubjectInfraConvert metricSubjectInfraConvert;
 
-    public MetricSubjectRepositoryImpl(MetricSubjectMapper subjectMapper) {
-        this.subjectMapper = subjectMapper;
-    }
 
     @Override
     public MetricSubject findById(String id) {
         MetricSubjectDO subjectDO = subjectMapper.selectById(Long.parseLong(id));
-        return MetricSubjectInfraConvert.INSTANCE.toMetricSubject(subjectDO);
+        return metricSubjectInfraConvert.toMetricSubject(subjectDO);
     }
 
     @Override
@@ -46,7 +45,7 @@ public class MetricSubjectRepositoryImpl implements MetricSubjectRepository {
                 .orderByAsc(MetricSubjectDO::getSortOrder);
         Page<MetricSubjectDO> result = subjectMapper.selectPage(page, wrapper);
         List<MetricSubject> list = Optional.ofNullable(result.getRecords()).orElse(List.of()).stream()
-                .map(MetricSubjectInfraConvert.INSTANCE::toMetricSubject)
+                .map(metricSubjectInfraConvert::toMetricSubject)
                 .toList();
         return new com.cyan.arch.common.api.Page<>(list, result.getCurrent(), result.getSize(), result.getTotal());
     }
@@ -57,21 +56,21 @@ public class MetricSubjectRepositoryImpl implements MetricSubjectRepository {
                 .orderByAsc(MetricSubjectDO::getLevel)
                 .orderByAsc(MetricSubjectDO::getSortOrder);
         List<MetricSubjectDO> list = subjectMapper.selectList(wrapper);
-        return list.stream().map(MetricSubjectInfraConvert.INSTANCE::toMetricSubject).toList();
+        return list.stream().map(metricSubjectInfraConvert::toMetricSubject).toList();
     }
 
     @Override
     public MetricSubject save(MetricSubject subject) {
         long id = SnowflakeIdUtil.nextId();
         subject.setId(String.valueOf(id));
-        MetricSubjectDO subjectDO = MetricSubjectInfraConvert.INSTANCE.toMetricSubjectDO(subject);
+        MetricSubjectDO subjectDO = metricSubjectInfraConvert.toMetricSubjectDO(subject);
         subjectMapper.insert(subjectDO);
         return findById(subject.getId());
     }
 
     @Override
     public MetricSubject update(MetricSubject subject) {
-        MetricSubjectDO subjectDO = MetricSubjectInfraConvert.INSTANCE.toMetricSubjectDO(subject);
+        MetricSubjectDO subjectDO = metricSubjectInfraConvert.toMetricSubjectDO(subject);
         subjectMapper.updateById(subjectDO);
         return findById(subject.getId());
     }
@@ -89,7 +88,7 @@ public class MetricSubjectRepositoryImpl implements MetricSubjectRepository {
         LambdaQueryWrapper<MetricSubjectDO> wrapper = new LambdaQueryWrapper<MetricSubjectDO>()
                 .in(MetricSubjectDO::getSubjectCode, subjectCodes);
         List<MetricSubjectDO> list = subjectMapper.selectList(wrapper);
-        return list.stream().map(MetricSubjectInfraConvert.INSTANCE::toMetricSubject).toList();
+        return list.stream().map(metricSubjectInfraConvert::toMetricSubject).toList();
     }
 
     @Override
@@ -97,6 +96,6 @@ public class MetricSubjectRepositoryImpl implements MetricSubjectRepository {
         LambdaQueryWrapper<MetricSubjectDO> wrapper = new LambdaQueryWrapper<MetricSubjectDO>()
                 .eq(MetricSubjectDO::getSubjectCode, subjectCode);
         MetricSubjectDO subjectDO = subjectMapper.selectOne(wrapper);
-        return MetricSubjectInfraConvert.INSTANCE.toMetricSubject(subjectDO);
+        return metricSubjectInfraConvert.toMetricSubject(subjectDO);
     }
 }

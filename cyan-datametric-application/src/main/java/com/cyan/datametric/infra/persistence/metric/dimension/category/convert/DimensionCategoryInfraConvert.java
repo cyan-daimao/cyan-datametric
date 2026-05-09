@@ -4,7 +4,6 @@ import com.cyan.arch.common.mapstruct.MapstructConvert;
 import com.cyan.datametric.domain.metric.dimension.category.DimensionCategory;
 import com.cyan.datametric.infra.persistence.metric.dimension.category.DimensionCategoryDO;
 import org.mapstruct.Mapper;
-import org.mapstruct.factory.Mappers;
 
 /**
  * 维度分类基础设施层转换
@@ -12,9 +11,8 @@ import org.mapstruct.factory.Mappers;
  * @author cy.Y
  * @since 1.0.0
  */
-@Mapper(uses = MapstructConvert.class)
+@Mapper(componentModel = "spring", uses = MapstructConvert.class)
 public interface DimensionCategoryInfraConvert {
-    DimensionCategoryInfraConvert INSTANCE = Mappers.getMapper(DimensionCategoryInfraConvert.class);
 
     default DimensionCategory toDimensionCategory(DimensionCategoryDO categoryDO) {
         if (categoryDO == null) return null;

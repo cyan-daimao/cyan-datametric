@@ -12,6 +12,9 @@ import org.springframework.stereotype.Service;
 
 import java.util.*;
 import java.util.stream.Collectors;
+import lombok.RequiredArgsConstructor;
+import com.cyan.arch.common.api.Assert;
+import com.cyan.arch.common.api.BusinessException;
 
 /**
  * 指标主题域服务实现
@@ -20,50 +23,49 @@ import java.util.stream.Collectors;
  * @since 1.0.0
  */
 @Service
+@RequiredArgsConstructor
 public class MetricSubjectServiceImpl implements MetricSubjectService {
 
     private final MetricSubjectRepository metricSubjectRepository;
+    private final MetricSubjectAppConvert metricSubjectAppConvert;
 
-    public MetricSubjectServiceImpl(MetricSubjectRepository metricSubjectRepository) {
-        this.metricSubjectRepository = metricSubjectRepository;
-    }
 
     @Override
     public MetricSubjectBO create(MetricSubjectCmd cmd) {
         if (cmd.getSubjectCode() == null || cmd.getSubjectCode().isBlank()) {
             cmd.setSubjectCode("SUB_" + System.currentTimeMillis());
         }
-        MetricSubject subject = MetricSubjectAppConvert.INSTANCE.toMetricSubject(cmd);
+        MetricSubject subject = metricSubjectAppConvert.toMetricSubject(cmd);
         subject = subject.save(metricSubjectRepository);
-        return MetricSubjectAppConvert.INSTANCE.toMetricSubjectBO(subject);
+        return metricSubjectAppConvert.toMetricSubjectBO(subject);
     }
 
     @Override
     public MetricSubjectBO update(String id, MetricSubjectCmd cmd) {
-        MetricSubject subject = MetricSubjectAppConvert.INSTANCE.toMetricSubject(cmd);
+        MetricSubject subject = metricSubjectAppConvert.toMetricSubject(cmd);
         subject.setId(id);
         subject = subject.update(metricSubjectRepository);
-        return MetricSubjectAppConvert.INSTANCE.toMetricSubjectBO(subject);
+        return metricSubjectAppConvert.toMetricSubjectBO(subject);
     }
 
     @Override
     public void delete(String id) {
-        MetricSubject subject = new MetricSubject();
-        subject.setId(id);
+        MetricSubject subject = metricSubjectRepository.findById(id);
+        Assert.notNull(subject, new BusinessException("指标主题域不存在"));
         subject.delete(metricSubjectRepository);
     }
 
     @Override
     public MetricSubjectBO detail(String id) {
         MetricSubject subject = metricSubjectRepository.findById(id);
-        return MetricSubjectAppConvert.INSTANCE.toMetricSubjectBO(subject);
+        return metricSubjectAppConvert.toMetricSubjectBO(subject);
     }
 
     @Override
     public Page<MetricSubjectBO> page(MetricSubjectQuery query) {
         Page<MetricSubject> page = metricSubjectRepository.page(query);
         List<MetricSubjectBO> list = page.getData().stream()
-                .map(MetricSubjectAppConvert.INSTANCE::toMetricSubjectBO)
+                .map(metricSubjectAppConvert::toMetricSubjectBO)
                 .toList();
         return new Page<>(list, page.getCurrent(), page.getSize(), page.getTotal());
     }
@@ -72,7 +74,7 @@ public class MetricSubjectServiceImpl implements MetricSubjectService {
     public List<MetricSubjectBO> tree() {
         List<MetricSubject> all = metricSubjectRepository.findAll();
         List<MetricSubjectBO> bos = all.stream()
-                .map(MetricSubjectAppConvert.INSTANCE::toMetricSubjectBO)
+                .map(metricSubjectAppConvert::toMetricSubjectBO)
                 .toList();
 
         Map<String, List<MetricSubjectBO>> parentMap = bos.stream()

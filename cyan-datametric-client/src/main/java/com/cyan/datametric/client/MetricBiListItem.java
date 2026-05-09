@@ -1,17 +1,17 @@
-package com.cyan.datametric.adapter.metric.http.dto;
+package com.cyan.datametric.client;
 
 import lombok.Data;
 import lombok.experimental.Accessors;
 
 /**
- * BI 指标简化列表项 DTO
+ * BI 指标简化列表项（Client DTO）
  *
  * @author cy.Y
  * @since 1.0.0
  */
 @Data
 @Accessors(chain = true)
-public class MetricBiListItemDTO {
+public class MetricBiListItem {
 
     private String id;
     private String metricCode;

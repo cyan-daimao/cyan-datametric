@@ -8,7 +8,6 @@ import com.cyan.datametric.application.config.bo.DimensionBO;
 import com.cyan.datametric.application.config.bo.ModifierBO;
 import com.cyan.datametric.application.config.bo.TimePeriodBO;
 import org.mapstruct.Mapper;
-import org.mapstruct.factory.Mappers;
 
 /**
  * 配置适配层转换
@@ -16,9 +15,8 @@ import org.mapstruct.factory.Mappers;
  * @author cy.Y
  * @since 1.0.0
  */
-@Mapper(uses = MapstructConvert.class)
+@Mapper(componentModel = "spring", uses = MapstructConvert.class)
 public interface ConfigAdapterConvert {
-    ConfigAdapterConvert INSTANCE = Mappers.getMapper(ConfigAdapterConvert.class);
 
     ModifierDTO toModifierDTO(ModifierBO bo);
 

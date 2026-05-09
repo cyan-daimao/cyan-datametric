@@ -4,7 +4,6 @@ import com.cyan.arch.common.mapstruct.MapstructConvert;
 import com.cyan.datametric.adapter.metric.http.dto.*;
 import com.cyan.datametric.application.metric.bo.*;
 import org.mapstruct.Mapper;
-import org.mapstruct.factory.Mappers;
 
 /**
  * 指标适配层转换
@@ -12,9 +11,8 @@ import org.mapstruct.factory.Mappers;
  * @author cy.Y
  * @since 1.0.0
  */
-@Mapper(uses = MapstructConvert.class)
+@Mapper(componentModel = "spring", uses = MapstructConvert.class)
 public interface MetricAdapterConvert {
-    MetricAdapterConvert INSTANCE = Mappers.getMapper(MetricAdapterConvert.class);
 
     default MetricDTO toMetricDTO(MetricBO bo) {
         if (bo == null) return null;

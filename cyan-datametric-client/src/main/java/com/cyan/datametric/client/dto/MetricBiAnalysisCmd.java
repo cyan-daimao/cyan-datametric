@@ -1,4 +1,4 @@
-package com.cyan.datametric.adapter.analysis.http.dto;
+package com.cyan.datametric.client.dto;
 
 import lombok.AllArgsConstructor;
 import lombok.Data;
@@ -15,6 +15,7 @@ import java.util.List;
  */
 @Data
 @NoArgsConstructor
+@AllArgsConstructor
 @Accessors(chain = true)
 public class MetricBiAnalysisCmd {
 

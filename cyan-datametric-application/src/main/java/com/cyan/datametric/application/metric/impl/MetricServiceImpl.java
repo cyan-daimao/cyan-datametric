@@ -3,6 +3,7 @@ package com.cyan.datametric.application.metric.impl;
 import com.cyan.arch.common.api.Assert;
 import com.cyan.arch.common.api.BusinessException;
 import com.cyan.arch.common.api.Page;
+import com.cyan.datametric.application.metric.MetricBOAssembler;
 import com.cyan.datametric.application.metric.MetricService;
 import com.cyan.datametric.application.metric.bo.*;
 import com.cyan.datametric.application.metric.cmd.*;
@@ -18,7 +19,6 @@ import com.cyan.datametric.domain.metric.query.MetricPageQuery;
 import com.cyan.datametric.domain.metric.repository.MetricFavoriteRepository;
 import com.cyan.datametric.domain.metric.repository.MetricLineageRepository;
 import com.cyan.datametric.domain.metric.repository.MetricRepository;
-import com.cyan.datametric.domain.metric.subject.MetricSubject;
 import com.cyan.datametric.domain.metric.subject.repository.MetricSubjectRepository;
 import com.cyan.datametric.enums.MetricStatus;
 import com.cyan.datametric.enums.MetricType;
@@ -47,7 +47,8 @@ public class MetricServiceImpl implements MetricService {
     private final MetricFavoriteRepository favoriteRepository;
     private final ModifierRepository modifierRepository;
     private final TimePeriodRepository timePeriodRepository;
-    private final MetricSubjectRepository metricSubjectRepository;
+    private final MetricAppConvert metricAppConvert;
+    private final MetricBOAssembler metricBOAssembler;
 
     @Value("${datametric.default-datasource:cyan_iceberg}")
     private String defaultDatasource;
@@ -57,9 +58,9 @@ public class MetricServiceImpl implements MetricService {
     public Page<MetricBO> page(MetricPageQuery query, String currentUser) {
         com.cyan.arch.common.api.Page<Metric> page = metricRepository.page(query);
         List<MetricBO> list = page.getData().stream()
-                .map(this::toMetricBO)
+                .map(metricBOAssembler::assembleBasic)
                 .toList();
-        fillSubjectName(list);
+        metricBOAssembler.fillSubjectName(list);
         return new Page<>(list, page.getCurrent(), page.getSize(), page.getTotal());
     }
 
@@ -67,8 +68,8 @@ public class MetricServiceImpl implements MetricService {
     public MetricBO detail(String id) {
         Metric metric = metricRepository.findById(id);
         Assert.notNull(metric, new BusinessException("指标不存在"));
-        MetricBO bo = toDetailBO(metric);
-        fillSubjectName(bo);
+        MetricBO bo = metricBOAssembler.assembleDetail(metric);
+        metricBOAssembler.fillSubjectName(bo);
         return bo;
     }
 
@@ -79,23 +80,13 @@ public class MetricServiceImpl implements MetricService {
         if (!org.springframework.util.StringUtils.hasText(cmd.getDsName())) {
             cmd.setDsName(defaultDatasource);
         }
-        Metric metric = new Metric();
-        if (org.springframework.util.StringUtils.hasText(cmd.getMetricCode())) {
-            metric.setMetricCode(cmd.getMetricCode());
-        } else {
+        Metric metric = metricAppConvert.toMetric(cmd);
+        if (!org.springframework.util.StringUtils.hasText(metric.getMetricCode())) {
             metric.setMetricCode("M" + SnowflakeIdUtil.nextId());
         }
-        metric.setMetricName(cmd.getMetricName());
         metric.setMetricType(MetricType.ATOMIC);
-        metric.setSubjectCode(cmd.getSubjectCode());
-        metric.setBizCaliber(cmd.getBizCaliber());
-        metric.setTechCaliber(cmd.getTechCaliber());
-        metric.setOwner(cmd.getOwner());
-        metric.setCreateBy(cmd.getCreateBy());
-        metric.setUpdateBy(cmd.getUpdateBy());
-        metric.setAtomicExt(MetricAppConvert.INSTANCE.toAtomicExt(cmd));
         metric = metric.save(metricRepository);
-        return toMetricBO(metric);
+        return metricBOAssembler.assembleBasic(metric);
     }
 
     @Override
@@ -111,47 +102,30 @@ public class MetricServiceImpl implements MetricService {
         if (existing.getStatus() == MetricStatus.PUBLISHED) {
             metricRepository.saveSnapshot(existing);
         }
-        Metric metric = new Metric();
+        Metric metric = metricAppConvert.toMetric(cmd);
         metric.setId(id);
         metric.setMetricCode(existing.getMetricCode());
-        metric.setMetricName(cmd.getMetricName());
         metric.setMetricType(MetricType.ATOMIC);
-        metric.setSubjectCode(cmd.getSubjectCode());
-        metric.setBizCaliber(cmd.getBizCaliber());
-        metric.setTechCaliber(cmd.getTechCaliber());
         metric.setStatus(existing.getStatus() == MetricStatus.PUBLISHED ? MetricStatus.DRAFT : existing.getStatus());
         metric.setVersion(existing.getStatus() == MetricStatus.PUBLISHED ? existing.getVersion() + 1 : existing.getVersion());
-        metric.setOwner(cmd.getOwner());
         metric.setCreateBy(existing.getCreateBy());
-        metric.setUpdateBy(cmd.getUpdateBy());
         metric.setCreatedAt(existing.getCreatedAt());
-        metric.setAtomicExt(MetricAppConvert.INSTANCE.toAtomicExt(cmd));
         metric = metric.update(metricRepository);
-        return toMetricBO(metric);
+        return metricBOAssembler.assembleBasic(metric);
     }
 
     @Override
     @Transactional
     public MetricBO createDerived(DerivedMetricCmd cmd) {
         checkNameDuplicate(cmd.getMetricName());
-        Metric metric = new Metric();
-        if (org.springframework.util.StringUtils.hasText(cmd.getMetricCode())) {
-            metric.setMetricCode(cmd.getMetricCode());
-        } else {
+        Metric metric = metricAppConvert.toMetric(cmd);
+        if (!org.springframework.util.StringUtils.hasText(metric.getMetricCode())) {
             metric.setMetricCode("M" + SnowflakeIdUtil.nextId());
         }
-        metric.setMetricName(cmd.getMetricName());
         metric.setMetricType(MetricType.DERIVED);
-        metric.setSubjectCode(cmd.getSubjectCode());
-        metric.setBizCaliber(cmd.getBizCaliber());
-        metric.setTechCaliber(cmd.getTechCaliber());
-        metric.setOwner(cmd.getOwner());
-        metric.setCreateBy(cmd.getCreateBy());
-        metric.setUpdateBy(cmd.getUpdateBy());
-        metric.setDerivedExt(MetricAppConvert.INSTANCE.toDerivedExt(cmd));
         metric = metric.save(metricRepository);
         buildLineage(metric);
-        return toMetricBO(metric);
+        return metricBOAssembler.assembleBasic(metric);
     }
 
     @Override
@@ -164,49 +138,32 @@ public class MetricServiceImpl implements MetricService {
         if (existing.getStatus() == MetricStatus.PUBLISHED) {
             metricRepository.saveSnapshot(existing);
         }
-        Metric metric = new Metric();
+        Metric metric = metricAppConvert.toMetric(cmd);
         metric.setId(id);
         metric.setMetricCode(existing.getMetricCode());
-        metric.setMetricName(cmd.getMetricName());
         metric.setMetricType(MetricType.DERIVED);
-        metric.setSubjectCode(cmd.getSubjectCode());
-        metric.setBizCaliber(cmd.getBizCaliber());
-        metric.setTechCaliber(cmd.getTechCaliber());
         metric.setStatus(existing.getStatus() == MetricStatus.PUBLISHED ? MetricStatus.DRAFT : existing.getStatus());
         metric.setVersion(existing.getStatus() == MetricStatus.PUBLISHED ? existing.getVersion() + 1 : existing.getVersion());
-        metric.setOwner(cmd.getOwner());
         metric.setCreateBy(existing.getCreateBy());
-        metric.setUpdateBy(cmd.getUpdateBy());
         metric.setCreatedAt(existing.getCreatedAt());
-        metric.setDerivedExt(MetricAppConvert.INSTANCE.toDerivedExt(cmd));
         metric = metric.update(metricRepository);
         lineageRepository.deleteByMetricId(id);
         buildLineage(metric);
-        return toMetricBO(metric);
+        return metricBOAssembler.assembleBasic(metric);
     }
 
     @Override
     @Transactional
     public MetricBO createComposite(CompositeMetricCmd cmd) {
         checkNameDuplicate(cmd.getMetricName());
-        Metric metric = new Metric();
-        if (org.springframework.util.StringUtils.hasText(cmd.getMetricCode())) {
-            metric.setMetricCode(cmd.getMetricCode());
-        } else {
+        Metric metric = metricAppConvert.toMetric(cmd);
+        if (!org.springframework.util.StringUtils.hasText(metric.getMetricCode())) {
             metric.setMetricCode("M" + SnowflakeIdUtil.nextId());
         }
-        metric.setMetricName(cmd.getMetricName());
         metric.setMetricType(MetricType.COMPOSITE);
-        metric.setSubjectCode(cmd.getSubjectCode());
-        metric.setBizCaliber(cmd.getBizCaliber());
-        metric.setTechCaliber(cmd.getTechCaliber());
-        metric.setOwner(cmd.getOwner());
-        metric.setCreateBy(cmd.getCreateBy());
-        metric.setUpdateBy(cmd.getUpdateBy());
-        metric.setCompositeExt(MetricAppConvert.INSTANCE.toCompositeExt(cmd));
         metric = metric.save(metricRepository);
         buildLineage(metric);
-        return toMetricBO(metric);
+        return metricBOAssembler.assembleBasic(metric);
     }
 
     @Override
@@ -219,25 +176,18 @@ public class MetricServiceImpl implements MetricService {
         if (existing.getStatus() == MetricStatus.PUBLISHED) {
             metricRepository.saveSnapshot(existing);
         }
-        Metric metric = new Metric();
+        Metric metric = metricAppConvert.toMetric(cmd);
         metric.setId(id);
         metric.setMetricCode(existing.getMetricCode());
-        metric.setMetricName(cmd.getMetricName());
         metric.setMetricType(MetricType.COMPOSITE);
-        metric.setSubjectCode(cmd.getSubjectCode());
-        metric.setBizCaliber(cmd.getBizCaliber());
-        metric.setTechCaliber(cmd.getTechCaliber());
         metric.setStatus(existing.getStatus() == MetricStatus.PUBLISHED ? MetricStatus.DRAFT : existing.getStatus());
         metric.setVersion(existing.getStatus() == MetricStatus.PUBLISHED ? existing.getVersion() + 1 : existing.getVersion());
-        metric.setOwner(cmd.getOwner());
         metric.setCreateBy(existing.getCreateBy());
-        metric.setUpdateBy(cmd.getUpdateBy());
         metric.setCreatedAt(existing.getCreatedAt());
-        metric.setCompositeExt(MetricAppConvert.INSTANCE.toCompositeExt(cmd));
         metric = metric.update(metricRepository);
         lineageRepository.deleteByMetricId(id);
         buildLineage(metric);
-        return toMetricBO(metric);
+        return metricBOAssembler.assembleBasic(metric);
     }
 
     @Override
@@ -264,7 +214,7 @@ public class MetricServiceImpl implements MetricService {
         } else {
             throw new BusinessException("不支持的状态变更");
         }
-        return toMetricBO(metric);
+        return metricBOAssembler.assembleBasic(metric);
     }
 
     @Override
@@ -290,12 +240,12 @@ public class MetricServiceImpl implements MetricService {
         Set<String> favSet = new HashSet<>(favoriteIds);
         List<MetricBO> list = page.getData().stream()
                 .map(m -> {
-                    MetricBO bo = toMetricBO(m);
+                    MetricBO bo = metricBOAssembler.assembleBasic(m);
                     bo.setIsFavorite(favSet.contains(m.getId()));
                     return bo;
                 })
                 .toList();
-        fillSubjectName(list);
+        metricBOAssembler.fillSubjectName(list);
         return new Page<>(list, page.getCurrent(), page.getSize(), page.getTotal());
     }
 
@@ -401,43 +351,11 @@ public class MetricServiceImpl implements MetricService {
         lineageRepository.deleteByMetricId(metricId);
         buildLineage(history);
 
-        return toMetricBO(metricRepository.findById(metricId));
+        return metricBOAssembler.assembleBasic(metricRepository.findById(metricId));
     }
 
     // ==================== 私有方法 ====================
 
-    private void fillSubjectName(List<MetricBO> bos) {
-        if (bos == null || bos.isEmpty()) {
-            return;
-        }
-        List<String> subjectCodes = bos.stream()
-                .map(MetricBO::getSubjectCode)
-                .filter(sc -> sc != null && !sc.isBlank())
-                .distinct()
-                .toList();
-        if (subjectCodes.isEmpty()) {
-            return;
-        }
-        List<MetricSubject> subjects = metricSubjectRepository.findBySubjectCodes(subjectCodes);
-        Map<String, String> nameMap = subjects.stream()
-                .filter(s -> s.getSubjectCode() != null)
-                .collect(Collectors.toMap(MetricSubject::getSubjectCode, MetricSubject::getSubjectName, (a, b) -> a));
-        for (MetricBO bo : bos) {
-            if (bo.getSubjectCode() != null) {
-                bo.setSubjectName(nameMap.get(bo.getSubjectCode()));
-            }
-        }
-    }
-
-    private void fillSubjectName(MetricBO bo) {
-        if (bo == null || bo.getSubjectCode() == null || bo.getSubjectCode().isBlank()) {
-            return;
-        }
-        MetricSubject subject = metricSubjectRepository.findBySubjectCode(bo.getSubjectCode());
-        if (subject != null) {
-            bo.setSubjectName(subject.getSubjectName());
-        }
-    }
 
     private void checkNameDuplicate(String metricName) {
         Metric existing = metricRepository.findByName(metricName);
@@ -451,57 +369,6 @@ public class MetricServiceImpl implements MetricService {
         }
     }
 
-    private MetricBO toMetricBO(Metric metric) {
-        if (metric == null) return null;
-        MetricBO bo = MetricAppConvert.INSTANCE.toMetricBO(metric);
-        if (metric.getAtomicExt() != null) {
-            MetricAtomicExt ext = metric.getAtomicExt();
-            bo.setStatFunc(ext.getStatFunc() == null ? null : ext.getStatFunc().getCode());
-            bo.setDsName(ext.getDsName());
-            bo.setDbName(ext.getDbName());
-            bo.setTblName(ext.getTblName());
-            bo.setColName(ext.getColName());
-        }
-        return bo;
-    }
-
-    private MetricBO toDetailBO(Metric metric) {
-        MetricBO bo = toMetricBO(metric);
-        if (metric.getAtomicExt() != null) {
-            MetricAtomicBO atomic = new MetricAtomicBO();
-            atomic.setStatFunc(metric.getAtomicExt().getStatFunc() == null ? null : metric.getAtomicExt().getStatFunc().getCode());
-            atomic.setDsName(metric.getAtomicExt().getDsName());
-            atomic.setDbName(metric.getAtomicExt().getDbName());
-            atomic.setTblName(metric.getAtomicExt().getTblName());
-            atomic.setColName(metric.getAtomicExt().getColName());
-            if (metric.getAtomicExt().getFilterCondition() != null) {
-                atomic.setFilterCondition(metric.getAtomicExt().getFilterCondition().stream()
-                        .map(f -> new MetricAtomicBO.FilterConditionBO().setField(f.getField()).setOp(f.getOp()).setValue(f.getValue()))
-                        .toList());
-            }
-            bo.setAtomic(atomic);
-        }
-        if (metric.getDerivedExt() != null) {
-            MetricDerivedBO derived = new MetricDerivedBO();
-            derived.setAtomicMetricId(metric.getDerivedExt().getAtomicMetricId());
-            derived.setTimePeriodId(metric.getDerivedExt().getTimePeriodId());
-            derived.setModifierIds(metric.getDerivedExt().getModifierIds());
-            derived.setDimensionIds(metric.getDerivedExt().getDimensionIds());
-            if (metric.getDerivedExt().getGroupByFields() != null) {
-                derived.setGroupByFields(metric.getDerivedExt().getGroupByFields().stream()
-                        .map(g -> new MetricDerivedBO.GroupByFieldBO().setCol(g.getCol()))
-                        .toList());
-            }
-            bo.setDerived(derived);
-        }
-        if (metric.getCompositeExt() != null) {
-            MetricCompositeBO composite = new MetricCompositeBO();
-            composite.setFormula(metric.getCompositeExt().getFormula());
-            composite.setMetricRefs(metric.getCompositeExt().getMetricRefs());
-            bo.setComposite(composite);
-        }
-        return bo;
-    }
 
     private String buildSql(String metricType, SqlPreviewCmd.DefinitionBody body) {
         return switch (MetricType.valueOf(metricType)) {

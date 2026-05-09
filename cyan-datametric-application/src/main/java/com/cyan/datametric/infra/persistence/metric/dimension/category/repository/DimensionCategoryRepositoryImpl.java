@@ -2,7 +2,6 @@ package com.cyan.datametric.infra.persistence.metric.dimension.category.reposito
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
-import com.cyan.arch.common.api.Pageable;
 import com.cyan.datametric.domain.metric.dimension.category.DimensionCategory;
 import com.cyan.datametric.domain.metric.dimension.category.query.DimensionCategoryQuery;
 import com.cyan.datametric.domain.metric.dimension.category.repository.DimensionCategoryRepository;
@@ -15,6 +14,7 @@ import org.springframework.stereotype.Repository;
 
 import java.util.List;
 import java.util.Optional;
+import lombok.RequiredArgsConstructor;
 
 /**
  * 维度分类仓储实现
@@ -23,18 +23,17 @@ import java.util.Optional;
  * @since 1.0.0
  */
 @Repository
+@RequiredArgsConstructor
 public class DimensionCategoryRepositoryImpl implements DimensionCategoryRepository {
 
     private final DimensionCategoryMapper categoryMapper;
+    private final DimensionCategoryInfraConvert dimensionCategoryInfraConvert;
 
-    public DimensionCategoryRepositoryImpl(DimensionCategoryMapper categoryMapper) {
-        this.categoryMapper = categoryMapper;
-    }
 
     @Override
     public DimensionCategory findById(String id) {
         DimensionCategoryDO categoryDO = categoryMapper.selectById(Long.parseLong(id));
-        return DimensionCategoryInfraConvert.INSTANCE.toDimensionCategory(categoryDO);
+        return dimensionCategoryInfraConvert.toDimensionCategory(categoryDO);
     }
 
     @Override
@@ -46,7 +45,7 @@ public class DimensionCategoryRepositoryImpl implements DimensionCategoryReposit
                 .orderByAsc(DimensionCategoryDO::getSortOrder);
         Page<DimensionCategoryDO> result = categoryMapper.selectPage(page, wrapper);
         List<DimensionCategory> list = Optional.ofNullable(result.getRecords()).orElse(List.of()).stream()
-                .map(DimensionCategoryInfraConvert.INSTANCE::toDimensionCategory)
+                .map(dimensionCategoryInfraConvert::toDimensionCategory)
                 .toList();
         return new com.cyan.arch.common.api.Page<>(list, result.getCurrent(), result.getSize(), result.getTotal());
     }
@@ -57,21 +56,21 @@ public class DimensionCategoryRepositoryImpl implements DimensionCategoryReposit
                 .orderByAsc(DimensionCategoryDO::getLevel)
                 .orderByAsc(DimensionCategoryDO::getSortOrder);
         List<DimensionCategoryDO> list = categoryMapper.selectList(wrapper);
-        return list.stream().map(DimensionCategoryInfraConvert.INSTANCE::toDimensionCategory).toList();
+        return list.stream().map(dimensionCategoryInfraConvert::toDimensionCategory).toList();
     }
 
     @Override
     public DimensionCategory save(DimensionCategory category) {
         long id = SnowflakeIdUtil.nextId();
         category.setId(String.valueOf(id));
-        DimensionCategoryDO categoryDO = DimensionCategoryInfraConvert.INSTANCE.toDimensionCategoryDO(category);
+        DimensionCategoryDO categoryDO = dimensionCategoryInfraConvert.toDimensionCategoryDO(category);
         categoryMapper.insert(categoryDO);
         return findById(category.getId());
     }
 
     @Override
     public DimensionCategory update(DimensionCategory category) {
-        DimensionCategoryDO categoryDO = DimensionCategoryInfraConvert.INSTANCE.toDimensionCategoryDO(category);
+        DimensionCategoryDO categoryDO = dimensionCategoryInfraConvert.toDimensionCategoryDO(category);
         categoryMapper.updateById(categoryDO);
         return findById(category.getId());
     }

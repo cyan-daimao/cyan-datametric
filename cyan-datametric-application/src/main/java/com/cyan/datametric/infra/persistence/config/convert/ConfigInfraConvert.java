@@ -11,7 +11,6 @@ import com.cyan.datametric.infra.persistence.config.dos.MetricTimePeriodDO;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.mapstruct.Mapper;
-import org.mapstruct.factory.Mappers;
 
 
 /**
@@ -20,9 +19,8 @@ import org.mapstruct.factory.Mappers;
  * @author cy.Y
  * @since 1.0.0
  */
-@Mapper(uses = MapstructConvert.class)
+@Mapper(componentModel = "spring", uses = MapstructConvert.class)
 public interface ConfigInfraConvert {
-    ConfigInfraConvert INSTANCE = Mappers.getMapper(ConfigInfraConvert.class);
 
     default Modifier toModifier(MetricModifierDO modifierDO) {
         if (modifierDO == null) return null;

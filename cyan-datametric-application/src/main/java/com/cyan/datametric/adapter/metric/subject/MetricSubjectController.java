@@ -13,6 +13,7 @@ import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import lombok.RequiredArgsConstructor;
 
 /**
  * 指标主题域控制器
@@ -22,19 +23,18 @@ import java.util.List;
  */
 @RestController
 @RequestMapping("/api/v1/metrics/subjects")
+@RequiredArgsConstructor
 public class MetricSubjectController {
 
     private final MetricSubjectService metricSubjectService;
+    private final MetricSubjectAdapterConvert metricSubjectAdapterConvert;
 
-    public MetricSubjectController(MetricSubjectService metricSubjectService) {
-        this.metricSubjectService = metricSubjectService;
-    }
 
     @GetMapping
     public Response<PageResultDTO<MetricSubjectDTO>> page(MetricSubjectQuery query) {
         com.cyan.arch.common.api.Page<MetricSubjectBO> page = metricSubjectService.page(query);
         return Response.success(new PageResultDTO<>(
-                page.getData().stream().map(MetricSubjectAdapterConvert.INSTANCE::toMetricSubjectDTO).toList(),
+                page.getData().stream().map(metricSubjectAdapterConvert::toMetricSubjectDTO).toList(),
                 page.getCurrent(), page.getSize(), page.getTotal()));
     }
 
@@ -42,14 +42,14 @@ public class MetricSubjectController {
     public Response<List<MetricSubjectDTO>> tree() {
         List<MetricSubjectBO> bos = metricSubjectService.tree();
         return Response.success(bos.stream()
-                .map(MetricSubjectAdapterConvert.INSTANCE::toMetricSubjectDTO)
+                .map(metricSubjectAdapterConvert::toMetricSubjectDTO)
                 .toList());
     }
 
     @GetMapping("/{id}")
     public Response<MetricSubjectDTO> detail(@PathVariable("id") String id) {
         MetricSubjectBO bo = metricSubjectService.detail(id);
-        return Response.success(MetricSubjectAdapterConvert.INSTANCE.toMetricSubjectDTO(bo));
+        return Response.success(metricSubjectAdapterConvert.toMetricSubjectDTO(bo));
     }
 
     @PostMapping
@@ -57,14 +57,14 @@ public class MetricSubjectController {
         cmd.setCreateBy(UserContextHolder.getCurrentEmployee().getPassport());
         cmd.setUpdateBy(UserContextHolder.getCurrentEmployee().getPassport());
         MetricSubjectBO bo = metricSubjectService.create(cmd);
-        return Response.success(MetricSubjectAdapterConvert.INSTANCE.toMetricSubjectDTO(bo));
+        return Response.success(metricSubjectAdapterConvert.toMetricSubjectDTO(bo));
     }
 
     @PutMapping("/{id}")
     public Response<MetricSubjectDTO> update(@PathVariable("id") String id, @RequestBody @Valid MetricSubjectCmd cmd) {
         cmd.setUpdateBy(UserContextHolder.getCurrentEmployee().getPassport());
         MetricSubjectBO bo = metricSubjectService.update(id, cmd);
-        return Response.success(MetricSubjectAdapterConvert.INSTANCE.toMetricSubjectDTO(bo));
+        return Response.success(metricSubjectAdapterConvert.toMetricSubjectDTO(bo));
     }
 
     @DeleteMapping("/{id}")

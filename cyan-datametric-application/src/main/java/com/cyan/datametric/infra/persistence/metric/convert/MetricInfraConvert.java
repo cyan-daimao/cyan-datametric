@@ -14,7 +14,6 @@ import com.cyan.datametric.infra.persistence.metric.dos.MetricDerivedDO;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.mapstruct.Mapper;
-import org.mapstruct.factory.Mappers;
 
 import java.util.List;
 
@@ -24,9 +23,8 @@ import java.util.List;
  * @author cy.Y
  * @since 1.0.0
  */
-@Mapper(uses = MapstructConvert.class)
+@Mapper(componentModel = "spring", uses = MapstructConvert.class)
 public interface MetricInfraConvert {
-    MetricInfraConvert INSTANCE = Mappers.getMapper(MetricInfraConvert.class);
 
     Metric toMetric(MetricDefinitionDO def);
 

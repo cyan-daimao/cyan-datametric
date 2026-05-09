@@ -11,6 +11,7 @@ import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import lombok.RequiredArgsConstructor;
 
 /**
  * 时间周期控制器
@@ -20,26 +21,25 @@ import java.util.List;
  */
 @RestController
 @RequestMapping("/api/v1/metrics/time-periods")
+@RequiredArgsConstructor
 public class TimePeriodController {
 
     private final TimePeriodService timePeriodService;
+    private final ConfigAdapterConvert configAdapterConvert;
 
-    public TimePeriodController(TimePeriodService timePeriodService) {
-        this.timePeriodService = timePeriodService;
-    }
 
     @GetMapping
     public Response<List<TimePeriodDTO>> listAll() {
         List<TimePeriodBO> list = timePeriodService.listAll();
         return Response.success(list.stream()
-                .map(ConfigAdapterConvert.INSTANCE::toTimePeriodDTO)
+                .map(configAdapterConvert::toTimePeriodDTO)
                 .toList());
     }
 
     @GetMapping("/{id}")
     public Response<TimePeriodDTO> detail(@PathVariable("id") String id) {
         TimePeriodBO bo = timePeriodService.detail(id);
-        return Response.success(ConfigAdapterConvert.INSTANCE.toTimePeriodDTO(bo));
+        return Response.success(configAdapterConvert.toTimePeriodDTO(bo));
     }
 
     @PostMapping
@@ -47,14 +47,14 @@ public class TimePeriodController {
         cmd.setCreateBy(UserContextHolder.getCurrentEmployee().getPassport());
         cmd.setUpdateBy(UserContextHolder.getCurrentEmployee().getPassport());
         TimePeriodBO bo = timePeriodService.create(cmd);
-        return Response.success(ConfigAdapterConvert.INSTANCE.toTimePeriodDTO(bo));
+        return Response.success(configAdapterConvert.toTimePeriodDTO(bo));
     }
 
     @PutMapping("/{id}")
     public Response<TimePeriodDTO> update(@PathVariable("id") String id, @RequestBody @Valid TimePeriodCmd cmd) {
         cmd.setUpdateBy(UserContextHolder.getCurrentEmployee().getPassport());
         TimePeriodBO bo = timePeriodService.update(id, cmd);
-        return Response.success(ConfigAdapterConvert.INSTANCE.toTimePeriodDTO(bo));
+        return Response.success(configAdapterConvert.toTimePeriodDTO(bo));
     }
 
     @DeleteMapping("/{id}")

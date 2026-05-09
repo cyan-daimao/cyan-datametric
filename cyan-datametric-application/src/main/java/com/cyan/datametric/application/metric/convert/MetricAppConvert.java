@@ -1,21 +1,16 @@
 package com.cyan.datametric.application.metric.convert;
 
 import com.cyan.arch.common.mapstruct.MapstructConvert;
-import com.cyan.datametric.application.metric.bo.*;
+import com.cyan.datametric.application.metric.bo.MetricBO;
 import com.cyan.datametric.application.metric.cmd.AtomicMetricCmd;
 import com.cyan.datametric.application.metric.cmd.DerivedMetricCmd;
 import com.cyan.datametric.domain.metric.Metric;
 import com.cyan.datametric.domain.metric.MetricAtomicExt;
 import com.cyan.datametric.domain.metric.MetricCompositeExt;
 import com.cyan.datametric.domain.metric.MetricDerivedExt;
-import com.cyan.datametric.enums.MetricStatus;
-import com.cyan.datametric.enums.MetricType;
 import com.cyan.datametric.enums.StatFunc;
 import org.mapstruct.Mapper;
-import org.mapstruct.Mapping;
-import org.mapstruct.factory.Mappers;
 
-import java.util.List;
 import java.util.stream.Collectors;
 
 /**
@@ -24,9 +19,8 @@ import java.util.stream.Collectors;
  * @author cy.Y
  * @since 1.0.0
  */
-@Mapper(uses = MapstructConvert.class)
+@Mapper(componentModel = "spring", uses = MapstructConvert.class)
 public interface MetricAppConvert {
-    MetricAppConvert INSTANCE = Mappers.getMapper(MetricAppConvert.class);
 
     MetricBO toMetricBO(Metric metric);
 
@@ -67,5 +61,59 @@ public interface MetricAppConvert {
         ext.setFormula(cmd.getFormula());
         ext.setMetricRefs(cmd.getMetricRefs());
         return ext;
+    }
+
+    /**
+     * 原子指标命令转换为领域对象
+     */
+    default Metric toMetric(AtomicMetricCmd cmd) {
+        if (cmd == null) return null;
+        Metric metric = new Metric();
+        metric.setMetricName(cmd.getMetricName());
+        metric.setMetricCode(cmd.getMetricCode());
+        metric.setSubjectCode(cmd.getSubjectCode());
+        metric.setBizCaliber(cmd.getBizCaliber());
+        metric.setTechCaliber(cmd.getTechCaliber());
+        metric.setOwner(cmd.getOwner());
+        metric.setCreateBy(cmd.getCreateBy());
+        metric.setUpdateBy(cmd.getUpdateBy());
+        metric.setAtomicExt(toAtomicExt(cmd));
+        return metric;
+    }
+
+    /**
+     * 派生指标命令转换为领域对象
+     */
+    default Metric toMetric(DerivedMetricCmd cmd) {
+        if (cmd == null) return null;
+        Metric metric = new Metric();
+        metric.setMetricName(cmd.getMetricName());
+        metric.setMetricCode(cmd.getMetricCode());
+        metric.setSubjectCode(cmd.getSubjectCode());
+        metric.setBizCaliber(cmd.getBizCaliber());
+        metric.setTechCaliber(cmd.getTechCaliber());
+        metric.setOwner(cmd.getOwner());
+        metric.setCreateBy(cmd.getCreateBy());
+        metric.setUpdateBy(cmd.getUpdateBy());
+        metric.setDerivedExt(toDerivedExt(cmd));
+        return metric;
+    }
+
+    /**
+     * 复合指标命令转换为领域对象
+     */
+    default Metric toMetric(com.cyan.datametric.application.metric.cmd.CompositeMetricCmd cmd) {
+        if (cmd == null) return null;
+        Metric metric = new Metric();
+        metric.setMetricName(cmd.getMetricName());
+        metric.setMetricCode(cmd.getMetricCode());
+        metric.setSubjectCode(cmd.getSubjectCode());
+        metric.setBizCaliber(cmd.getBizCaliber());
+        metric.setTechCaliber(cmd.getTechCaliber());
+        metric.setOwner(cmd.getOwner());
+        metric.setCreateBy(cmd.getCreateBy());
+        metric.setUpdateBy(cmd.getUpdateBy());
+        metric.setCompositeExt(toCompositeExt(cmd));
+        return metric;
     }
 }

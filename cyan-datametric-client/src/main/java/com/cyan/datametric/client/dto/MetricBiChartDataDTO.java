@@ -1,4 +1,4 @@
-package com.cyan.datametric.adapter.analysis.http.dto;
+package com.cyan.datametric.client.dto;
 
 import lombok.AllArgsConstructor;
 import lombok.Data;
@@ -9,7 +9,7 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * 指标 BI 分析结果（返回前端）
+ * 指标 BI 分析结果
  *
  * @author cy.Y
  * @since 1.0.0
