@@ -42,8 +42,11 @@ public class MetricSubjectServiceImpl implements MetricSubjectService {
 
     @Override
     public MetricSubjectBO update(String id, MetricSubjectCmd cmd) {
+        MetricSubject existing = metricSubjectRepository.findById(id);
+        Assert.notNull(existing, new BusinessException("指标主题域不存在"));
         MetricSubject subject = metricSubjectAppConvert.toMetricSubject(cmd);
         subject.setId(id);
+        subject.setCreateBy(existing.getCreateBy());
         subject = subject.update(metricSubjectRepository);
         return metricSubjectAppConvert.toMetricSubjectBO(subject);
     }

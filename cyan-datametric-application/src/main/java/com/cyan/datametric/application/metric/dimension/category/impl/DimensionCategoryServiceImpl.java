@@ -42,8 +42,11 @@ public class DimensionCategoryServiceImpl implements DimensionCategoryService {
 
     @Override
     public DimensionCategoryBO update(String id, DimensionCategoryCmd cmd) {
+        DimensionCategory existing = dimensionCategoryRepository.findById(id);
+        Assert.notNull(existing, new BusinessException("维度分类不存在"));
         DimensionCategory category = dimensionCategoryAppConvert.toDimensionCategory(cmd);
         category.setId(id);
+        category.setCreateBy(existing.getCreateBy());
         category = category.update(dimensionCategoryRepository);
         return dimensionCategoryAppConvert.toDimensionCategoryBO(category);
     }
