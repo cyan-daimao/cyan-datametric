@@ -85,18 +85,27 @@ public class BiAnalysisServiceImpl implements BiAnalysisService {
 
     // ==================== SQL 组装 ====================
 
+    private boolean isFilterChart(String chartType) {
+        return chartType != null && chartType.startsWith("FILTER_");
+    }
+
     private String buildSql(MetricBiAnalysisCmd cmd) {
-        if (CollectionUtils.isEmpty(cmd.getMetrics())) {
+        boolean isFilterChart = isFilterChart(cmd.getChartType());
+
+        if (!isFilterChart && CollectionUtils.isEmpty(cmd.getMetrics())) {
             throw new BusinessException("请至少选择一个指标");
         }
 
-        List<MetricInfo> metricInfos = new ArrayList<>();
-        for (MetricBiAnalysisCmd.MetricRef ref : cmd.getMetrics()) {
-            metricInfos.add(resolveMetric(ref));
+        if (isFilterChart && CollectionUtils.isEmpty(cmd.getDimensions())) {
+            throw new BusinessException("筛选框图表至少需要选择一个维度");
         }
 
-        Map<String, List<MetricInfo>> factGroups = metricInfos.stream()
-                .collect(Collectors.groupingBy(m -> m.tableRef));
+        List<MetricInfo> metricInfos = new ArrayList<>();
+        if (!CollectionUtils.isEmpty(cmd.getMetrics())) {
+            for (MetricBiAnalysisCmd.MetricRef ref : cmd.getMetrics()) {
+                metricInfos.add(resolveMetric(ref));
+            }
+        }
 
         List<DimensionInfo> dimensionInfos = new ArrayList<>();
         if (!CollectionUtils.isEmpty(cmd.getDimensions())) {
@@ -104,6 +113,13 @@ public class BiAnalysisServiceImpl implements BiAnalysisService {
                 dimensionInfos.add(resolveDimension(ref));
             }
         }
+
+        if (isFilterChart) {
+            return buildFilterSql(dimensionInfos, cmd);
+        }
+
+        Map<String, List<MetricInfo>> factGroups = metricInfos.stream()
+                .collect(Collectors.groupingBy(m -> m.tableRef));
 
         if (factGroups.size() == 1) {
             String factTableRef = factGroups.keySet().iterator().next();
@@ -133,6 +149,61 @@ public class BiAnalysisServiceImpl implements BiAnalysisService {
         } else {
             return buildMultiFactSql(factGroups, dimensionInfos, cmd);
         }
+    }
+
+    private String buildFilterSql(List<DimensionInfo> dimensionInfos, MetricBiAnalysisCmd cmd) {
+        if (dimensionInfos.isEmpty()) {
+            throw new BusinessException("筛选框图表至少需要选择一个维度");
+        }
+
+        String tableRef = dimensionInfos.get(0).tableName;
+        if (!StringUtils.hasText(tableRef)) {
+            throw new BusinessException("筛选框维度未配置关联维表");
+        }
+
+        StringBuilder sql = new StringBuilder();
+        sql.append("SELECT DISTINCT ");
+
+        List<String> selectCols = new ArrayList<>();
+        for (DimensionInfo dim : dimensionInfos) {
+            selectCols.add(dim.columnName + " AS `" + dim.dimCode + "`");
+        }
+        sql.append(String.join(", ", selectCols));
+        sql.append(" FROM ").append(tableRef);
+
+        List<String> conditions = new ArrayList<>();
+        if (!CollectionUtils.isEmpty(cmd.getFilters())) {
+            for (MetricBiAnalysisCmd.FilterRef filter : cmd.getFilters()) {
+                String condition = buildFilterCondition(filter, List.of(), dimensionInfos, null, null);
+                if (StringUtils.hasText(condition)) {
+                    conditions.add(condition);
+                }
+            }
+        }
+        if (!conditions.isEmpty()) {
+            sql.append(" WHERE ").append(String.join(" AND ", conditions));
+        }
+
+        if (!CollectionUtils.isEmpty(cmd.getOrders())) {
+            List<String> orderParts = new ArrayList<>();
+            for (MetricBiAnalysisCmd.OrderRef order : cmd.getOrders()) {
+                String orderCol = buildOrderColumn(order, List.of(), dimensionInfos, null, null);
+                if (StringUtils.hasText(orderCol)) {
+                    orderParts.add(orderCol + " " + order.getDirection());
+                }
+            }
+            if (!orderParts.isEmpty()) {
+                sql.append(" ORDER BY ").append(String.join(", ", orderParts));
+            }
+        }
+
+        Integer limit = cmd.getLimitValue();
+        if (limit == null || limit <= 0) {
+            limit = 1000;
+        }
+        sql.append(" LIMIT ").append(limit);
+
+        return sql.toString();
     }
 
     private String resolveSelectColumn(DimensionInfo dim) {
