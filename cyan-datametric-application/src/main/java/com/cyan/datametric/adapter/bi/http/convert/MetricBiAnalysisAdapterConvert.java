@@ -89,6 +89,7 @@ public class MetricBiAnalysisAdapterConvert {
                 .setColumns(bo.getColumns())
                 .setRows(bo.getRows())
                 .setSql(bo.getSql())
+                .setChartType(bo.getChartType())
                 .setErrorMessage(bo.getErrorMessage());
     }
 
@@ -105,6 +106,7 @@ public class MetricBiAnalysisAdapterConvert {
                 .setColumns(bo.getColumns())
                 .setRows(bo.getRows())
                 .setSql(bo.getSql())
+                .setChartType(bo.getChartType())
                 .setErrorMessage(bo.getErrorMessage());
     }
 

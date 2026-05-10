@@ -56,10 +56,12 @@ public class BiAnalysisServiceImpl implements BiAnalysisService {
             SqlExecuteResultDTO result = response.getData();
             long cost = System.currentTimeMillis() - start;
 
+            String chartType = cmd.getChartType();
+
             if (result == null) {
                 return metricBiAnalysisAppConvert.toChartDataBO(
                         "FAILED", cost, new ArrayList<>(), new ArrayList<>(), sql,
-                        response.getMessage() != null ? response.getMessage() : "执行失败");
+                        chartType, response.getMessage() != null ? response.getMessage() : "执行失败");
             }
 
             List<Map<String, Object>> rows = result.getData() != null ? result.getData() : List.of();
@@ -68,13 +70,13 @@ public class BiAnalysisServiceImpl implements BiAnalysisService {
             return metricBiAnalysisAppConvert.toChartDataBO(
                     result.getStatus(),
                     result.getCostTimeMs() != null ? result.getCostTimeMs() : cost,
-                    columns, rows, sql, result.getErrorMessage());
+                    columns, rows, sql, chartType, result.getErrorMessage());
         } catch (Exception e) {
             return metricBiAnalysisAppConvert.toChartDataBO(
                     "FAILED",
                     System.currentTimeMillis() - start,
                     new ArrayList<>(), new ArrayList<>(), null,
-                    e.getMessage());
+                    cmd.getChartType(), e.getMessage());
         }
     }
 
@@ -167,6 +169,9 @@ public class BiAnalysisServiceImpl implements BiAnalysisService {
         List<String> selectCols = new ArrayList<>();
         for (DimensionInfo dim : dimensionInfos) {
             selectCols.add(dim.columnName + " AS `" + dim.dimCode + "`");
+            if (StringUtils.hasText(dim.displayColumn) && !dim.displayColumn.equals(dim.columnName)) {
+                selectCols.add(dim.displayColumn + " AS `displayValue`");
+            }
         }
         sql.append(String.join(", ", selectCols));
         sql.append(" FROM ").append(tableRef);
