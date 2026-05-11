@@ -76,10 +76,12 @@ public class MetricBiAnalysisServiceImpl implements MetricBiAnalysisService {
 
         long costTimeMs = System.currentTimeMillis() - startTime;
 
+        String chartType = cmd.getChartType();
+
         if (response == null || response.getCode() != 200 || response.getData() == null) {
             return metricBiAnalysisAppConvert.toChartDataBO(
                     "FAILED", costTimeMs, new ArrayList<>(), new ArrayList<>(), sql,
-                    response != null ? response.getMessage() : "执行结果为空");
+                    chartType, response != null ? response.getMessage() : "执行结果为空");
         }
 
         SqlExecuteResultDTO result = response.getData();
@@ -97,7 +99,7 @@ public class MetricBiAnalysisServiceImpl implements MetricBiAnalysisService {
         return metricBiAnalysisAppConvert.toChartDataBO(
                 result.getStatus(),
                 result.getCostTimeMs() != null ? result.getCostTimeMs() : costTimeMs,
-                columns, rows, sql, result.getErrorMessage());
+                columns, rows, sql, chartType, result.getErrorMessage());
     }
 
     @Override

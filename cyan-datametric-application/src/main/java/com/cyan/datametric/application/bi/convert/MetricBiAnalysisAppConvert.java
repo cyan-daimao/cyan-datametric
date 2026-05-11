@@ -98,12 +98,19 @@ public class MetricBiAnalysisAppConvert {
     public ChartDataBO toChartDataBO(String status, Long costTimeMs,
                                      List<String> columns, List<Map<String, Object>> rows,
                                      String sql, String errorMessage) {
+        return toChartDataBO(status, costTimeMs, columns, rows, sql, null, errorMessage);
+    }
+
+    public ChartDataBO toChartDataBO(String status, Long costTimeMs,
+                                     List<String> columns, List<Map<String, Object>> rows,
+                                     String sql, String chartType, String errorMessage) {
         return new ChartDataBO()
                 .setStatus(status)
                 .setCostTimeMs(costTimeMs)
                 .setColumns(columns)
                 .setRows(rows)
                 .setSql(sql)
+                .setChartType(chartType)
                 .setErrorMessage(errorMessage);
     }
 }
