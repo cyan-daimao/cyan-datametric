@@ -234,12 +234,12 @@ public class MetricSqlBuilder {
             return null;
         }
         return switch (operator.toUpperCase()) {
-            case "EQ", "=" -> column + " = '" + values.getFirst().replace("'", "''") + "'";
-            case "NE", "!=" -> column + " != '" + values.getFirst().replace("'", "''") + "'";
-            case "GT", ">" -> column + " > '" + values.getFirst().replace("'", "''") + "'";
-            case "GTE", ">=" -> column + " >= '" + values.getFirst().replace("'", "''") + "'";
-            case "LT", "<" -> column + " < '" + values.getFirst().replace("'", "''") + "'";
-            case "LTE", "<=" -> column + " <= '" + values.getFirst().replace("'", "''") + "'";
+            case "EQ", "=" -> column + " = '" + values.get(0).replace("'", "''") + "'";
+            case "NE", "!=" -> column + " != '" + values.get(0).replace("'", "''") + "'";
+            case "GT", ">" -> column + " > '" + values.get(0).replace("'", "''") + "'";
+            case "GTE", ">=" -> column + " >= '" + values.get(0).replace("'", "''") + "'";
+            case "LT", "<" -> column + " < '" + values.get(0).replace("'", "''") + "'";
+            case "LTE", "<=" -> column + " <= '" + values.get(0).replace("'", "''") + "'";
             case "IN" -> {
                 String vals = values.stream().map(v -> "'" + v.replace("'", "''") + "'").collect(Collectors.joining(","));
                 yield column + " IN (" + vals + ")";
@@ -251,8 +251,8 @@ public class MetricSqlBuilder {
             case "BETWEEN" -> column + " BETWEEN '" + values.get(0).replace("'", "''") + "' AND '" + values.get(1).replace("'", "''") + "'";
             case "IS_NULL" -> column + " IS NULL";
             case "IS_NOT_NULL" -> column + " IS NOT NULL";
-            case "LIKE" -> column + " LIKE '%" + values.getFirst().replace("'", "''") + "%'";
-            case "NOT_LIKE" -> column + " NOT LIKE '%" + values.getFirst().replace("'", "''") + "%'";
+            case "LIKE" -> column + " LIKE '%" + values.get(0).replace("'", "''") + "%'";
+            case "NOT_LIKE" -> column + " NOT LIKE '%" + values.get(0).replace("'", "''") + "%'";
             default -> throw new BusinessException("不支持的过滤操作符: " + operator);
         };
     }

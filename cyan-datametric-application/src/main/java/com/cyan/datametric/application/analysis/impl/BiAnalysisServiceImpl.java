@@ -65,7 +65,7 @@ public class BiAnalysisServiceImpl implements BiAnalysisService {
             }
 
             List<Map<String, Object>> rows = result.getData() != null ? result.getData() : List.of();
-            List<String> columns = rows.isEmpty() ? List.of() : new ArrayList<>(rows.getFirst().keySet());
+            List<String> columns = rows.isEmpty() ? List.of() : new ArrayList<>(rows.get(0).keySet());
 
             return metricBiAnalysisAppConvert.toChartDataBO(
                     result.getStatus(),
@@ -548,16 +548,16 @@ public class BiAnalysisServiceImpl implements BiAnalysisService {
                 .collect(Collectors.joining(", "));
 
         return switch (operator.toUpperCase()) {
-            case "EQ", "=" -> column + " = '" + values.getFirst().replace("'", "''") + "'";
-            case "NE", "!=" -> column + " != '" + values.getFirst().replace("'", "''") + "'";
-            case "GT", ">" -> column + " > '" + values.getFirst().replace("'", "''") + "'";
-            case "GTE", ">=" -> column + " >= '" + values.getFirst().replace("'", "''") + "'";
-            case "LT", "<" -> column + " < '" + values.getFirst().replace("'", "''") + "'";
-            case "LTE", "<=" -> column + " <= '" + values.getFirst().replace("'", "''") + "'";
+            case "EQ", "=" -> column + " = '" + values.get(0).replace("'", "''") + "'";
+            case "NE", "!=" -> column + " != '" + values.get(0).replace("'", "''") + "'";
+            case "GT", ">" -> column + " > '" + values.get(0).replace("'", "''") + "'";
+            case "GTE", ">=" -> column + " >= '" + values.get(0).replace("'", "''") + "'";
+            case "LT", "<" -> column + " < '" + values.get(0).replace("'", "''") + "'";
+            case "LTE", "<=" -> column + " <= '" + values.get(0).replace("'", "''") + "'";
             case "IN" -> column + " IN (" + valueStr + ")";
             case "NOT_IN" -> column + " NOT IN (" + valueStr + ")";
-            case "LIKE" -> column + " LIKE '%" + values.getFirst().replace("'", "''") + "%'";
-            case "NOT_LIKE" -> column + " NOT LIKE '%" + values.getFirst().replace("'", "''") + "%'";
+            case "LIKE" -> column + " LIKE '%" + values.get(0).replace("'", "''") + "%'";
+            case "NOT_LIKE" -> column + " NOT LIKE '%" + values.get(0).replace("'", "''") + "%'";
             case "IS_NULL" -> column + " IS NULL";
             case "IS_NOT_NULL" -> column + " IS NOT NULL";
             case "BETWEEN" -> {
@@ -839,7 +839,7 @@ public class BiAnalysisServiceImpl implements BiAnalysisService {
 
         cte.append(String.join(", ", selectCols));
 
-        cte.append("\n    FROM ").append(factGroups.getFirst().cteAlias);
+        cte.append("\n    FROM ").append(factGroups.get(0).cteAlias);
         for (int i = 1; i < factGroups.size(); i++) {
             cte.append("\n    FULL OUTER JOIN ").append(factGroups.get(i).cteAlias).append(" ON ");
             List<String> joinConditions = new ArrayList<>();
@@ -857,7 +857,7 @@ public class BiAnalysisServiceImpl implements BiAnalysisService {
                 }
                 String leftExpr;
                 if (i == 1) {
-                    leftExpr = factGroups.getFirst().cteAlias + ".dim_key_" + factGroups.getFirst().index + "_" + d;
+                    leftExpr = factGroups.get(0).cteAlias + ".dim_key_" + factGroups.get(0).index + "_" + d;
                 } else {
                     StringBuilder coalesce = new StringBuilder("COALESCE(");
                     List<String> args = new ArrayList<>();

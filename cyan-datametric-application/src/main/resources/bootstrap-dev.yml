@@ -23,5 +23,6 @@ spring:
 datametric:
   default-datasource: cyan_iceberg
 
+
 server:
   port: 8080
