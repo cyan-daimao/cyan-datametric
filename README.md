@@ -7,7 +7,7 @@
 <p><b>指标平台 — 数据应用服务的基石</b></p>
 
 <!-- 徽章 -->
-<img src="https://img.shields.io/badge/Java-17-ED8B00?style=flat-square&logo=openjdk&logoColor=white" alt="Java" />
+<img src="https://img.shields.io/badge/Java-21-ED8B00?style=flat-square&logo=openjdk&logoColor=white" alt="Java" />
 <img src="https://img.shields.io/badge/Spring%20Boot-3.3.13-6DB33F?style=flat-square&logo=springboot&logoColor=white" alt="Spring Boot" />
 <img src="https://img.shields.io/badge/MyBatis%20Plus-3.5.7-4479A1?style=flat-square&logo=mybatis&logoColor=white" alt="MyBatis Plus" />
 <img src="https://img.shields.io/badge/MySQL-8.3.0-4479A1?style=flat-square&logo=mysql&logoColor=white" alt="MySQL" />
