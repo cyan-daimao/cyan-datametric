@@ -67,14 +67,21 @@ public class DimensionRepositoryImpl implements DimensionRepository {
                 .map(configInfraConvert::toDimension)
                 .collect(java.util.stream.Collectors.toCollection(ArrayList::new));
 
-        // 第一页头部插入内置时间维度
+        // 第一页头部插入内置时间维度（支持 dimName 过滤）
+        int builtinCount = 0;
         if (query.current() <= 1) {
             for (BuiltinTimeDimension builtin : BuiltinTimeDimension.listAll()) {
+                if (StringUtils.isNotBlank(query.getDimName())) {
+                    if (builtin.getDimName() == null || !builtin.getDimName().contains(query.getDimName())) {
+                        continue;
+                    }
+                }
                 list.add(0, toBuiltinDimension(builtin));
+                builtinCount++;
             }
         }
 
-        long total = result.getTotal() + BuiltinTimeDimension.listAll().size();
+        long total = result.getTotal() + builtinCount;
         return new com.cyan.arch.common.api.Page<>(list, result.getCurrent(), result.getSize(), total);
     }
 
