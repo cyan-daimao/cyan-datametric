@@ -220,6 +220,13 @@ public class MetricBiAnalysisServiceImpl implements MetricBiAnalysisService {
 
         List<BiDimensionBO> allDimensions = page.getData().stream()
                 .map(d -> metricBiAnalysisAppConvert.toBiDimensionBO(d, categoryNameMap.get(d.getCategoryId())))
+                .filter(d -> {
+                    // name 参数对内置时间维度也生效（Repository 层未对插入的内置维度做过滤）
+                    if (StringUtils.hasText(name) && d != null) {
+                        return d.getDimName() != null && d.getDimName().contains(name);
+                    }
+                    return true;
+                })
                 .toList();
 
         // 分离内置时间维度（不参与 dataauth 权限过滤）
@@ -256,8 +263,10 @@ public class MetricBiAnalysisServiceImpl implements MetricBiAnalysisService {
                 .filter(Objects::nonNull)
                 .toList();
         if (permittedCodes.isEmpty()) {
-            // 有权限接口但无任何权限，只返回内置维度
-            return builtinDimensions;
+            // 有权限接口但无任何权限，降级返回全量维度（不局限于内置维度）
+            List<BiDimensionBO> result = new ArrayList<>(dbDimensions);
+            result.addAll(builtinDimensions);
+            return result;
         }
 
         Set<String> permittedSet = new HashSet<>(permittedCodes);
