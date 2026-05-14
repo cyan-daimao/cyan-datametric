@@ -4,11 +4,14 @@ import com.cyan.arch.common.api.Assert;
 import com.cyan.arch.common.api.BusinessException;
 import com.cyan.arch.common.api.Page;
 import com.cyan.arch.common.api.Response;
+import com.cyan.dataauth.client.AuthCheckClient;
 import com.cyan.dataauth.client.AuthMetricClient;
 import com.cyan.dataauth.cmd.MetricCheckCmd;
 import com.cyan.dataauth.cmd.MetricFilterSqlCmd;
 import com.cyan.dataauth.dto.MetricCheckResult;
 import com.cyan.dataauth.dto.MetricResourceDTO;
+import com.cyan.dataauth.dto.UserSecurityLevelDTO;
+import com.cyan.dataauth.enums.SecurityLevel;
 import com.cyan.datagateway.client.SqlGatewayClient;
 import com.cyan.datagateway.client.cmd.SqlExecuteCmd;
 import com.cyan.datagateway.client.dto.SqlExecuteResultDTO;
@@ -71,6 +74,7 @@ public class MetricBiAnalysisServiceImpl implements MetricBiAnalysisService {
     private final SqlGatewayClient sqlGatewayClient;
     private final MetricBiAnalysisAppConvert metricBiAnalysisAppConvert;
     private final AuthMetricClient authMetricClient;
+    private final AuthCheckClient authCheckClient;
 
     @Value("${cyan.datametric.default-catalog:iceberg}")
     private String defaultCatalog;
@@ -180,31 +184,11 @@ public class MetricBiAnalysisServiceImpl implements MetricBiAnalysisService {
                 .map(m -> metricBiAnalysisAppConvert.toBiMetricBO(m, subjectNameMap.get(m.getSubjectCode())))
                 .toList();
 
-        // 调用 dataauth 过滤无 VIEW 权限的指标
+        // 按密级过滤：L1 默认所有人可见，L2~L4 按用户 maxSecurityLevel 过滤
         String passport = getCurrentPassport();
-        if (passport == null) {
-            log.warn("listMetrics 无法获取当前用户上下文，跳过权限过滤");
-            return allMetrics;
-        }
-
-        Response<List<MetricResourceDTO>> permittedResp =
-                authMetricClient.listMetrics(passport, "METRIC", null, null);
-        if (permittedResp == null || permittedResp.getData() == null) {
-            log.warn("listMetrics 获取权限列表失败，降级返回全量指标");
-            return allMetrics;
-        }
-
-        List<String> permittedCodes = permittedResp.getData().stream()
-                .map(MetricResourceDTO::getCode)
-                .filter(Objects::nonNull)
-                .toList();
-        if (permittedCodes.isEmpty()) {
-            return List.of();
-        }
-
-        Set<String> permittedSet = new HashSet<>(permittedCodes);
+        String userMaxLevel = getUserMaxSecurityLevel(passport);
         return allMetrics.stream()
-                .filter(m -> m.getMetricCode() != null && permittedSet.contains(m.getMetricCode()))
+                .filter(m -> canAccess(m.getSecurityLevel(), userMaxLevel))
                 .toList();
     }
 
@@ -345,6 +329,39 @@ public class MetricBiAnalysisServiceImpl implements MetricBiAnalysisService {
     private String getCurrentPassport() {
         EmployeeDTO employee = UserContextHolder.getCurrentEmployee();
         return employee != null ? employee.getPassport() : null;
+    }
+
+    /**
+     * 获取用户最高可访问密级，降级为 L1
+     */
+    private String getUserMaxSecurityLevel(String passport) {
+        if (passport == null) {
+            return "L1";
+        }
+        try {
+            Response<UserSecurityLevelDTO> resp = authCheckClient.getUserMaxSecurityLevel(passport);
+            if (resp != null && resp.getData() != null && resp.getData().getMaxSecurityLevel() != null) {
+                return resp.getData().getMaxSecurityLevel();
+            }
+        } catch (Exception e) {
+            log.warn("获取用户密级失败，降级为 L1, passport={}", passport, e);
+        }
+        return "L1";
+    }
+
+    /**
+     * 判断用户是否可以访问目标密级的数据
+     */
+    private boolean canAccess(String metricSecurityLevel, String userMaxLevel) {
+        if (metricSecurityLevel == null || "L1".equalsIgnoreCase(metricSecurityLevel)) {
+            return true;
+        }
+        SecurityLevel userLevel = SecurityLevel.of(userMaxLevel);
+        SecurityLevel metricLevel = SecurityLevel.of(metricSecurityLevel);
+        if (userLevel == null) {
+            return false;
+        }
+        return userLevel.permits(metricLevel);
     }
 
     private List<String> extractMetricCodes(MetricBiAnalysisCmd cmd) {

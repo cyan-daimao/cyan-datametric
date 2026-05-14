@@ -44,6 +44,7 @@ public class MetricBiAnalysisAppConvert {
             bo.setStatFunc(metric.getAtomicExt().getStatFunc() == null ? null : metric.getAtomicExt().getStatFunc().getCode());
         }
         bo.setDescription(metric.getBizCaliber());
+        bo.setSecurityLevel(metric.getSecurityLevel());
         return bo;
     }
 
