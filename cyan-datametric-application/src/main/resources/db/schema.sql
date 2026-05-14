@@ -215,8 +215,11 @@ INSERT INTO metric_time_period(period_code, period_name, period_type, relative_v
 ('THIS_YEAR', '本年', 'RELATIVE', 0, 'YEAR');
 
 -- 公共维度预置数据
+-- 注意：日/周/月/年/季度/小时/分钟/秒 等时间粒度请优先使用系统内置时间维度
+-- （DIM_DATE_DAY、DIM_DATE_HOUR、DIM_TIME_HOUR 等），无需维护 d_date 维表。
+-- DIM_DATE 保留作为维表方案的向后兼容。
 INSERT INTO metric_dimension(dim_code, dim_name, dim_type, data_type, dim_values, category_id, table_name, column_name, description) VALUES
-('DIM_DATE', '日期', 'DATE', 'DATE', null, (SELECT id FROM metric_dimension_category WHERE name='时间周期'), 'd_date', 'dt', '日期维度，按天统计'),
+('DIM_DATE', '日期', 'DATE', 'DATE', null, (SELECT id FROM metric_dimension_category WHERE name='时间周期'), 'd_date', 'dt', '日期维度，按天统计。推荐使用系统内置维度 DIM_DATE_DAY，无需维表。'),
 ('DIM_PROVINCE', '省份', 'GEO', 'STRING', '["北京","上海","广东","浙江","江苏"]', (SELECT id FROM metric_dimension_category WHERE name='地理位置'), 'd_province', 'province_name', '省级地理维度'),
 ('DIM_CITY', '城市', 'GEO', 'STRING', '["北京","上海","广州","深圳","杭州"]', (SELECT id FROM metric_dimension_category WHERE name='地理位置'), 'd_city', 'city_name', '城市级地理维度'),
 ('DIM_CHANNEL', '渠道', 'ENUM', 'STRING', '["APP","WEB","小程序","H5"]', (SELECT id FROM metric_dimension_category WHERE name='渠道来源'), 'd_channel', 'channel_name', '用户访问渠道'),

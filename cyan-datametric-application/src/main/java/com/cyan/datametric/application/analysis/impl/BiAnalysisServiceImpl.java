@@ -9,6 +9,7 @@ import com.cyan.datametric.application.analysis.BiAnalysisService;
 import com.cyan.datametric.application.bi.bo.ChartDataBO;
 import com.cyan.datametric.application.bi.convert.MetricBiAnalysisAppConvert;
 import com.cyan.datametric.client.dto.MetricBiAnalysisCmd;
+import com.cyan.datametric.domain.config.BuiltinTimeDimension;
 import com.cyan.datametric.domain.config.Dimension;
 import com.cyan.datametric.domain.config.repository.DimensionRepository;
 import com.cyan.datametric.domain.metric.Metric;
@@ -147,6 +148,26 @@ public class BiAnalysisServiceImpl implements BiAnalysisService {
                 throw new BusinessException("维度 '" + dimName + "' 所在表与指标事实表 '" + factTableRef
                         + "' 之间未配置关联关系，请在元数据平台的表详情页配置。");
             }
+
+            // 检查每个维表是否都有对应的 JOIN 路径
+            Set<String> joinedDimTables = new HashSet<>();
+            for (TableRelationDTO join : joins) {
+                String dimTable = join.getTargetCatalog() + "." + join.getTargetSchema() + "." + join.getTargetTable();
+                joinedDimTables.add(dimTable);
+            }
+            for (String dimTableRef : dimTableRefs) {
+                if (!joinedDimTables.contains(dimTableRef)) {
+                    DimensionInfo missingDim = dimensionInfos.stream()
+                            .filter(d -> dimTableRef.equals(d.tableName))
+                            .findFirst()
+                            .orElse(null);
+                    String dimName = missingDim != null ? missingDim.alias : "维度";
+                    throw new BusinessException("维度 '" + dimName + "' 所在表 '" + dimTableRef
+                            + "' 与指标事实表 '" + factTableRef
+                            + "' 之间未配置关联关系，请在元数据平台的表详情页配置。");
+                }
+            }
+
             return buildJoinSql(metricInfos, dimensionInfos, joins, cmd, factTableRef);
         } else {
             return buildMultiFactSql(factGroups, dimensionInfos, cmd);
@@ -477,6 +498,20 @@ public class BiAnalysisServiceImpl implements BiAnalysisService {
         if (!StringUtils.hasText(dimCode)) {
             throw new BusinessException("维度编码不能为空");
         }
+
+        // 先匹配内置时间维度
+        BuiltinTimeDimension builtin = BuiltinTimeDimension.of(dimCode);
+        if (builtin != null) {
+            DimensionInfo info = new DimensionInfo();
+            info.dimCode = dimCode;
+            // 内置维度的 columnName 是完整 SQL 表达式，不加反引号
+            info.columnName = builtin.buildExpr(null);
+            info.alias = StringUtils.hasText(ref.getAlias()) ? ref.getAlias() : builtin.getDimName();
+            info.tableName = null;
+            info.displayColumn = null;
+            return info;
+        }
+
         Dimension dim = dimensionRepository.findByDimCode(dimCode);
         if (dim == null) {
             throw new BusinessException("维度 '" + dimCode + "' 不存在");
@@ -889,13 +924,18 @@ public class BiAnalysisServiceImpl implements BiAnalysisService {
         Map<String, String> dimAliasMap = new HashMap<>();
         int dimAliasIdx = 0;
         for (DimensionInfo dim : dimensionInfos) {
-            String dimAlias = dimAliasMap.get(dim.tableName);
-            if (dimAlias == null) {
-                dimAlias = "d" + dimAliasIdx++;
-                dimAliasMap.put(dim.tableName, dimAlias);
-            }
             String col = resolveSelectColumn(dim);
-            selectItems.add(dimAlias + "." + col + " AS `" + dim.alias + "`");
+            if (StringUtils.hasText(dim.tableName)) {
+                String dimAlias = dimAliasMap.get(dim.tableName);
+                if (dimAlias == null) {
+                    dimAlias = "d" + dimAliasIdx++;
+                    dimAliasMap.put(dim.tableName, dimAlias);
+                }
+                selectItems.add(dimAlias + "." + col + " AS `" + dim.alias + "`");
+            } else {
+                // 内置维度（如时间维度）无需表别名前缀
+                selectItems.add(col + " AS `" + dim.alias + "`");
+            }
         }
 
         for (FactGroup group : factGroups) {

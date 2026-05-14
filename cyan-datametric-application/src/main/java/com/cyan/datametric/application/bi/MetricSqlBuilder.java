@@ -3,6 +3,7 @@ package com.cyan.datametric.application.bi;
 import com.cyan.arch.common.api.Assert;
 import com.cyan.arch.common.api.BusinessException;
 import com.cyan.datametric.client.dto.MetricBiAnalysisCmd;
+import com.cyan.datametric.domain.config.BuiltinTimeDimension;
 import com.cyan.datametric.domain.config.Dimension;
 import com.cyan.datametric.domain.config.Modifier;
 import com.cyan.datametric.domain.config.TimePeriod;
@@ -181,6 +182,18 @@ public class MetricSqlBuilder {
             return result;
         }
         for (MetricBiAnalysisCmd.DimensionRef ref : dimRefs) {
+            // 先匹配内置时间维度
+            BuiltinTimeDimension builtin = BuiltinTimeDimension.of(ref.getDimCode());
+            if (builtin != null) {
+                result.add(new DimensionInfo(
+                        ref.getDimCode(),
+                        ref.getAlias() != null && !ref.getAlias().isBlank() ? ref.getAlias() : builtin.getDimName(),
+                        builtin.buildExpr(null),
+                        null
+                ));
+                continue;
+            }
+
             Dimension dimension = dimensionRepository.findByDimCode(ref.getDimCode());
             Assert.notNull(dimension, new BusinessException(MetricBiErrorCode.DIMENSION_NOT_FOUND.getMessage()));
             String columnName = dimension.getColumnName();

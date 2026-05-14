@@ -4,6 +4,7 @@ import com.cyan.arch.common.api.Page;
 import com.cyan.datametric.application.config.bo.DimensionBO;
 import com.cyan.datametric.application.config.cmd.DimensionCmd;
 import com.cyan.datametric.application.config.convert.ConfigAppConvert;
+import com.cyan.datametric.domain.config.BuiltinTimeDimension;
 import com.cyan.datametric.domain.config.Dimension;
 import com.cyan.datametric.domain.config.query.DimensionPageQuery;
 import com.cyan.datametric.domain.config.repository.DimensionRepository;
@@ -36,6 +37,8 @@ public class DimensionService {
         if (cmd.getDimCode() == null || cmd.getDimCode().isBlank()) {
             cmd.setDimCode("DIM" + SnowflakeIdUtil.nextId());
         }
+        Assert.isTrue(BuiltinTimeDimension.of(cmd.getDimCode()) == null,
+                new BusinessException("维度编码 '" + cmd.getDimCode() + "' 为系统内置维度，不可创建"));
         Dimension dimension = configAppConvert.toDimension(cmd);
         dimension = dimension.save(dimensionRepository);
         DimensionBO bo = configAppConvert.toDimensionBO(dimension);
@@ -44,7 +47,15 @@ public class DimensionService {
     }
 
     public DimensionBO update(String id, DimensionCmd cmd) {
+        BuiltinTimeDimension builtin = BuiltinTimeDimension.of(id);
+        if (builtin != null) {
+            throw new BusinessException("维度编码 '" + id + "' 为系统内置维度，不可修改");
+        }
         Dimension existing = dimensionRepository.findById(id);
+        Assert.isTrue(BuiltinTimeDimension.of(existing.getDimCode()) == null,
+                new BusinessException("维度编码 '" + existing.getDimCode() + "' 为系统内置维度，不可修改"));
+        Assert.isTrue(BuiltinTimeDimension.of(cmd.getDimCode()) == null,
+                new BusinessException("维度编码 '" + cmd.getDimCode() + "' 为系统内置维度，不可修改"));
         Dimension dimension = configAppConvert.toDimension(cmd);
         dimension.setId(id);
         dimension.setDimCode(existing.getDimCode());
@@ -55,12 +66,23 @@ public class DimensionService {
     }
 
     public void delete(String id) {
+        BuiltinTimeDimension builtin = BuiltinTimeDimension.of(id);
+        if (builtin != null) {
+            throw new BusinessException("维度编码 '" + id + "' 为系统内置维度，不可删除");
+        }
         Dimension dimension = dimensionRepository.findById(id);
         Assert.notNull(dimension, new BusinessException("维度不存在"));
+        Assert.isTrue(BuiltinTimeDimension.of(dimension.getDimCode()) == null,
+                new BusinessException("维度编码 '" + dimension.getDimCode() + "' 为系统内置维度，不可删除"));
         dimension.delete(dimensionRepository);
     }
 
     public DimensionBO detail(String id) {
+        // 先检查是否是内置维度编码
+        BuiltinTimeDimension builtin = BuiltinTimeDimension.of(id);
+        if (builtin != null) {
+            return toBuiltinDimensionBO(builtin);
+        }
         Dimension dimension = dimensionRepository.findById(id);
         DimensionBO bo = configAppConvert.toDimensionBO(dimension);
         assembleCategoryName(bo);
@@ -71,9 +93,15 @@ public class DimensionService {
     public Page<DimensionBO> page(DimensionPageQuery query) {
         Page<Dimension> page = dimensionRepository.page(query);
         List<DimensionBO> list = page.getData().stream()
-                .map(configAppConvert::toDimensionBO)
-                .peek(this::assembleCategoryName)
-                .peek(this::assembleTableName)
+                .map(d -> {
+                    if (BuiltinTimeDimension.of(d.getDimCode()) != null) {
+                        return toBuiltinDimensionBO(BuiltinTimeDimension.of(d.getDimCode()));
+                    }
+                    DimensionBO bo = configAppConvert.toDimensionBO(d);
+                    assembleCategoryName(bo);
+                    assembleTableName(bo);
+                    return bo;
+                })
                 .toList();
         return new Page<>(list, page.getCurrent(), page.getSize(), page.getTotal());
     }
@@ -99,5 +127,23 @@ public class DimensionService {
             //     // Feign 调用失败不抛异常，tableName 保持原值
             // }
         }
+    }
+
+    /**
+     * 将内置时间维度转换为业务对象
+     *
+     * @param builtin 内置时间维度枚举
+     * @return 维度业务对象
+     */
+    private DimensionBO toBuiltinDimensionBO(BuiltinTimeDimension builtin) {
+        DimensionBO bo = new DimensionBO();
+        bo.setId(builtin.name());
+        bo.setDimCode(builtin.name());
+        bo.setDimName(builtin.getDimName());
+        bo.setDimType("DATE");
+        bo.setDataType("STRING");
+        bo.setColumnName(builtin.buildExpr(null));
+        bo.setDescription("系统内置时间维度，无需维表");
+        return bo;
     }
 }
