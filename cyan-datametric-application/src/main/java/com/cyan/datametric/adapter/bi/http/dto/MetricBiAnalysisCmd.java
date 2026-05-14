@@ -70,6 +70,9 @@ public class MetricBiAnalysisCmd {
          * 别名
          */
         private String alias;
+
+        /** 指标显示名称 */
+        private String metricName;
     }
 
     @Data
@@ -86,6 +89,9 @@ public class MetricBiAnalysisCmd {
          * 别名
          */
         private String alias;
+
+        /** 维度显示名称 */
+        private String dimName;
     }
 
     @Data

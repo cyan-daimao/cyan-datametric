@@ -1,5 +1,6 @@
 package com.cyan.datametric.adapter.bi.http.dto;
 
+import com.cyan.datametric.client.dto.MetricBiAnalysisCmd;
 import lombok.Data;
 import lombok.experimental.Accessors;
 
@@ -50,4 +51,9 @@ public class ChartDataDTO {
      * 错误信息
      */
     private String errorMessage;
+
+    /**
+     * enriched DSL（包含 dimName/metricName）
+     */
+    private MetricBiAnalysisCmd dsl;
 }

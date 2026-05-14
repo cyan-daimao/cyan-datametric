@@ -95,10 +95,13 @@ public class MetricBiAnalysisServiceImpl implements MetricBiAnalysisService {
             throw new BusinessException("无权限使用指定指标或维度");
         }
 
-        // 3. 生成 SQL
+        // 3. 填充 dimName / metricName 到 DSL（供前端统一显示）
+        enrichDimMetricNames(cmd);
+
+        // 4. 生成 SQL
         String sql = previewSql(cmd);
 
-        // 4. SQL 改写（指标层行过滤）
+        // 5. SQL 改写（指标层行过滤）
         MetricFilterSqlCmd filterCmd = new MetricFilterSqlCmd(executor, sql, metricCodes, dimCodes, null);
         Response<com.cyan.dataauth.dto.MetricFilterSqlResult> filterResp = authMetricClient.metricFilterSql(filterCmd);
         if (filterResp == null || filterResp.getData() == null) {
@@ -110,7 +113,7 @@ public class MetricBiAnalysisServiceImpl implements MetricBiAnalysisService {
         }
         String rewrittenSql = filterResult.getRewrittenSql();
 
-        // 5. 执行 SQL
+        // 6. 执行 SQL
         SqlExecuteCmd executeCmd = new SqlExecuteCmd()
                 .setSql(rewrittenSql)
                 .setPassport(executor);
@@ -124,7 +127,7 @@ public class MetricBiAnalysisServiceImpl implements MetricBiAnalysisService {
         if (response == null || response.getCode() != 200 || response.getData() == null) {
             return metricBiAnalysisAppConvert.toChartDataBO(
                     "FAILED", costTimeMs, new ArrayList<>(), new ArrayList<>(), rewrittenSql,
-                    chartType, response != null ? response.getMessage() : "执行结果为空");
+                    chartType, cmd, response != null ? response.getMessage() : "执行结果为空");
         }
 
         SqlExecuteResultDTO result = response.getData();
@@ -142,7 +145,7 @@ public class MetricBiAnalysisServiceImpl implements MetricBiAnalysisService {
         return metricBiAnalysisAppConvert.toChartDataBO(
                 result.getStatus(),
                 result.getCostTimeMs() != null ? result.getCostTimeMs() : costTimeMs,
-                columns, rows, rewrittenSql, chartType, result.getErrorMessage());
+                columns, rows, rewrittenSql, chartType, cmd, result.getErrorMessage());
     }
 
     @Override
@@ -408,6 +411,32 @@ public class MetricBiAnalysisServiceImpl implements MetricBiAnalysisService {
             }
         }
         return new ArrayList<>(dimCodes);
+    }
+
+    /**
+     * 根据编码查询并填充 dimName / metricName 到 DSL
+     */
+    private void enrichDimMetricNames(MetricBiAnalysisCmd cmd) {
+        if (cmd.getMetrics() != null) {
+            for (MetricBiAnalysisCmd.MetricRef ref : cmd.getMetrics()) {
+                if (ref.getMetricCode() != null && !StringUtils.hasText(ref.getMetricName())) {
+                    com.cyan.datametric.domain.metric.Metric metric = metricRepository.findByMetricCode(ref.getMetricCode());
+                    if (metric != null) {
+                        ref.setMetricName(metric.getMetricName());
+                    }
+                }
+            }
+        }
+        if (cmd.getDimensions() != null) {
+            for (MetricBiAnalysisCmd.DimensionRef ref : cmd.getDimensions()) {
+                if (ref.getDimCode() != null && !StringUtils.hasText(ref.getDimName())) {
+                    Dimension dim = dimensionRepository.findByDimCode(ref.getDimCode());
+                    if (dim != null) {
+                        ref.setDimName(dim.getDimName());
+                    }
+                }
+            }
+        }
     }
 
     private List<MetricCheckCmd.CheckItem> buildCheckItems(List<String> metricCodes, List<String> dimCodes, String action) {

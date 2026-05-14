@@ -54,4 +54,9 @@ public class MetricBiChartDataDTO {
      * 错误信息
      */
     private String errorMessage;
+
+    /**
+     * enriched DSL（包含 dimName/metricName）
+     */
+    private MetricBiAnalysisCmd dsl;
 }
