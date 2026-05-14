@@ -75,6 +75,12 @@ public class MetricDefinitionDO {
     private MetricStatus status;
 
     /**
+     * 数据密级
+     */
+    @TableField("security_level")
+    private String securityLevel;
+
+    /**
      * 负责人
      */
     @TableField("owner")

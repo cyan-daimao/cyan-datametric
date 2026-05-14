@@ -23,7 +23,7 @@ public interface MetricService {
     /**
      * 查询指标详情
      */
-    MetricBO detail(String id);
+    MetricBO detail(String id, String currentUser);
 
     /**
      * 创建原子指标

@@ -63,6 +63,11 @@ public class MetricBO {
     private MetricStatus status;
 
     /**
+     * 数据密级
+     */
+    private String securityLevel;
+
+    /**
      * 负责人
      */
     private String owner;

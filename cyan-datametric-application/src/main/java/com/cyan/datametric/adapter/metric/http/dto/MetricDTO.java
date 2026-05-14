@@ -24,6 +24,7 @@ public class MetricDTO {
     private String bizCaliber;
     private String techCaliber;
     private String status;
+    private String securityLevel;
     private String owner;
     private String statFunc;
     private String dsName;

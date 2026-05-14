@@ -42,7 +42,8 @@ public class MetricController {
 
     @GetMapping("/{id}")
     public Response<MetricDetailDTO> detail(@PathVariable("id") String id) {
-        MetricBO bo = metricService.detail(id);
+        String currentUser = UserContextHolder.getCurrentEmployee().getPassport();
+        MetricBO bo = metricService.detail(id, currentUser);
         return Response.success(metricAdapterConvert.toMetricDetailDTO(bo));
     }
 

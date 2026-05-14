@@ -8,6 +8,7 @@ CREATE TABLE IF NOT EXISTS metric_definition (
     biz_caliber TEXT COMMENT '业务口径',
     tech_caliber TEXT COMMENT '技术口径',
     status VARCHAR(32) NOT NULL DEFAULT 'DRAFT' COMMENT '状态: DRAFT/PUBLISHED/OFFLINE',
+    security_level VARCHAR(8) NOT NULL DEFAULT 'L1' COMMENT '数据密级: L1/L2/L3/L4',
     owner VARCHAR(64) COMMENT '负责人',
     version INT NOT NULL DEFAULT 1 COMMENT '版本号',
     create_by VARCHAR(64) COMMENT '创建人',
@@ -18,7 +19,8 @@ CREATE TABLE IF NOT EXISTS metric_definition (
     INDEX idx_metric_name (metric_name),
     INDEX idx_metric_type (metric_type),
     INDEX idx_subject_code (subject_code),
-    INDEX idx_status (status)
+    INDEX idx_status (status),
+    INDEX idx_security_level (security_level)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='指标定义表';
 
 -- 原子指标扩展表
@@ -237,6 +239,7 @@ CREATE TABLE IF NOT EXISTS metric_definition_history (
     biz_caliber TEXT COMMENT '业务口径',
     tech_caliber TEXT COMMENT '技术口径',
     status VARCHAR(32) NOT NULL COMMENT '状态',
+    security_level VARCHAR(8) NOT NULL DEFAULT 'L1' COMMENT '数据密级: L1/L2/L3/L4',
     owner VARCHAR(64) COMMENT '负责人',
     version INT NOT NULL COMMENT '快照时的版本号',
     create_by VARCHAR(64) COMMENT '创建人',

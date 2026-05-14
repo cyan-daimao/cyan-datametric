@@ -65,6 +65,11 @@ public class Metric {
     private MetricStatus status;
 
     /**
+     * 数据密级
+     */
+    private String securityLevel;
+
+    /**
      * 负责人
      */
     private String owner;
@@ -155,6 +160,7 @@ public class Metric {
         snap.setBizCaliber(this.bizCaliber);
         snap.setTechCaliber(this.techCaliber);
         snap.setStatus(this.status);
+        snap.setSecurityLevel(this.securityLevel);
         snap.setOwner(this.owner);
         snap.setVersion(this.version);
         snap.setCreateBy(this.createBy);

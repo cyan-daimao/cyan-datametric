@@ -25,6 +25,7 @@ public class MetricDetailDTO {
     private String bizCaliber;
     private String techCaliber;
     private String status;
+    private String securityLevel;
     private String owner;
     private Integer version;
     private LocalDateTime createdAt;

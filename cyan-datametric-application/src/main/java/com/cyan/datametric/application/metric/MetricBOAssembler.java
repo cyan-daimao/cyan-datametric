@@ -35,6 +35,7 @@ public class MetricBOAssembler {
     public MetricBO assembleBasic(Metric metric) {
         if (metric == null) return null;
         MetricBO bo = metricAppConvert.toMetricBO(metric);
+        bo.setSecurityLevel(metric.getSecurityLevel());
         if (metric.getAtomicExt() != null) {
             MetricAtomicExt ext = metric.getAtomicExt();
             bo.setStatFunc(ext.getStatFunc() == null ? null : ext.getStatFunc().getCode());

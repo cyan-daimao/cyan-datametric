@@ -24,6 +24,7 @@ import com.cyan.datametric.application.bi.bo.ChartDataBO;
 import com.cyan.datametric.application.bi.bo.DimensionValueBO;
 import com.cyan.datametric.application.bi.convert.MetricBiAnalysisAppConvert;
 import com.cyan.datametric.client.dto.MetricBiAnalysisCmd;
+import com.cyan.datametric.domain.config.BuiltinTimeDimension;
 import com.cyan.datametric.domain.config.Dimension;
 import com.cyan.datametric.domain.config.query.DimensionPageQuery;
 import com.cyan.datametric.domain.config.repository.DimensionRepository;
@@ -237,18 +238,33 @@ public class MetricBiAnalysisServiceImpl implements MetricBiAnalysisService {
                 .map(d -> metricBiAnalysisAppConvert.toBiDimensionBO(d, categoryNameMap.get(d.getCategoryId())))
                 .toList();
 
-        // 调用 dataauth 过滤无 VIEW 权限的维度
+        // 分离内置时间维度（不参与 dataauth 权限过滤）
+        List<BiDimensionBO> builtinDimensions = new ArrayList<>();
+        List<BiDimensionBO> dbDimensions = new ArrayList<>();
+        for (BiDimensionBO d : allDimensions) {
+            if (d != null && BuiltinTimeDimension.of(d.getDimCode()) != null) {
+                builtinDimensions.add(d);
+            } else {
+                dbDimensions.add(d);
+            }
+        }
+
+        // 调用 dataauth 过滤无 VIEW 权限的数据库维度
         String passport = getCurrentPassport();
         if (passport == null) {
             log.warn("listDimensions 无法获取当前用户上下文，跳过权限过滤");
-            return allDimensions;
+            List<BiDimensionBO> result = new ArrayList<>(dbDimensions);
+            result.addAll(builtinDimensions);
+            return result;
         }
 
         Response<List<MetricResourceDTO>> permittedResp =
                 authMetricClient.listMetrics(passport, "DIMENSION", null, null);
         if (permittedResp == null || permittedResp.getData() == null) {
             log.warn("listDimensions 获取权限列表失败，降级返回全量维度");
-            return allDimensions;
+            List<BiDimensionBO> result = new ArrayList<>(dbDimensions);
+            result.addAll(builtinDimensions);
+            return result;
         }
 
         List<String> permittedCodes = permittedResp.getData().stream()
@@ -256,13 +272,16 @@ public class MetricBiAnalysisServiceImpl implements MetricBiAnalysisService {
                 .filter(Objects::nonNull)
                 .toList();
         if (permittedCodes.isEmpty()) {
-            return List.of();
+            // 有权限接口但无任何权限，只返回内置维度
+            return builtinDimensions;
         }
 
         Set<String> permittedSet = new HashSet<>(permittedCodes);
-        return allDimensions.stream()
+        List<BiDimensionBO> result = dbDimensions.stream()
                 .filter(d -> d.getDimCode() != null && permittedSet.contains(d.getDimCode()))
-                .toList();
+                .collect(java.util.stream.Collectors.toCollection(ArrayList::new));
+        result.addAll(builtinDimensions);
+        return result;
     }
 
     @Override

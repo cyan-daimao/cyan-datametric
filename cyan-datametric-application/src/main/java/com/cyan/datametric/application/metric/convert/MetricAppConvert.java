@@ -74,6 +74,7 @@ public interface MetricAppConvert {
         metric.setSubjectCode(cmd.getSubjectCode());
         metric.setBizCaliber(cmd.getBizCaliber());
         metric.setTechCaliber(cmd.getTechCaliber());
+        metric.setSecurityLevel(cmd.getSecurityLevel());
         metric.setOwner(cmd.getOwner());
         metric.setCreateBy(cmd.getCreateBy());
         metric.setUpdateBy(cmd.getUpdateBy());
@@ -92,6 +93,7 @@ public interface MetricAppConvert {
         metric.setSubjectCode(cmd.getSubjectCode());
         metric.setBizCaliber(cmd.getBizCaliber());
         metric.setTechCaliber(cmd.getTechCaliber());
+        metric.setSecurityLevel(cmd.getSecurityLevel());
         metric.setOwner(cmd.getOwner());
         metric.setCreateBy(cmd.getCreateBy());
         metric.setUpdateBy(cmd.getUpdateBy());
@@ -110,6 +112,7 @@ public interface MetricAppConvert {
         metric.setSubjectCode(cmd.getSubjectCode());
         metric.setBizCaliber(cmd.getBizCaliber());
         metric.setTechCaliber(cmd.getTechCaliber());
+        metric.setSecurityLevel(cmd.getSecurityLevel());
         metric.setOwner(cmd.getOwner());
         metric.setCreateBy(cmd.getCreateBy());
         metric.setUpdateBy(cmd.getUpdateBy());
