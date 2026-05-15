@@ -58,6 +58,7 @@ public class DimensionRepositoryImpl implements DimensionRepository {
         Page<MetricDimensionDO> page = new Page<>(query.current(), query.size());
         LambdaQueryWrapper<MetricDimensionDO> wrapper = new LambdaQueryWrapper<MetricDimensionDO>()
                 .like(StringUtils.isNotBlank(query.getDimName()), MetricDimensionDO::getDimName, query.getDimName())
+                .isNull(MetricDimensionDO::getDeletedAt)
                 .orderByDesc(MetricDimensionDO::getUpdatedAt);
         if (StringUtils.isNotBlank(query.getCategoryId())) {
             wrapper.eq(MetricDimensionDO::getCategoryId, Long.parseLong(query.getCategoryId()));

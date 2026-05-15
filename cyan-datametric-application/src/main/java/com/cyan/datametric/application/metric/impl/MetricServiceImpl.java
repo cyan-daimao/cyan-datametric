@@ -259,6 +259,7 @@ public class MetricServiceImpl implements MetricService {
 
         Set<String> favSet = new HashSet<>(favoriteIds);
         List<MetricBO> list = page.getData().stream()
+                .filter(m -> m.getStatus() != com.cyan.datametric.enums.MetricStatus.OFFLINE)
                 .filter(m -> canAccess(m.getSecurityLevel(), userMaxLevel))
                 .map(m -> {
                     MetricBO bo = metricBOAssembler.assembleBasic(m);

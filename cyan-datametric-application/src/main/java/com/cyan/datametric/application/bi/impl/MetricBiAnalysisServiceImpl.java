@@ -187,10 +187,15 @@ public class MetricBiAnalysisServiceImpl implements MetricBiAnalysisService {
                 .map(m -> metricBiAnalysisAppConvert.toBiMetricBO(m, subjectNameMap.get(m.getSubjectCode())))
                 .toList();
 
+        // 过滤已下线指标
+        List<BiMetricBO> onlineMetrics = allMetrics.stream()
+                .filter(m -> m.getStatus() != com.cyan.datametric.enums.MetricStatus.OFFLINE)
+                .toList();
+
         // 按密级过滤：L1 默认所有人可见，L2~L4 按用户 maxSecurityLevel 过滤
         String passport = getCurrentPassport();
         String userMaxLevel = getUserMaxSecurityLevel(passport);
-        return allMetrics.stream()
+        return onlineMetrics.stream()
                 .filter(m -> canAccess(m.getSecurityLevel(), userMaxLevel))
                 .toList();
     }
