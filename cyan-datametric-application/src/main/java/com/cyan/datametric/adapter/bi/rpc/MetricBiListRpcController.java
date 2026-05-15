@@ -41,7 +41,8 @@ public class MetricBiListRpcController {
             @RequestParam(name = "subjectCode", required = false) String subjectCode,
             @RequestParam(name = "metricType", required = false) String metricType) {
 
-        List<BiMetricBO> bos = metricBiAnalysisService.listMetrics(name, subjectCode, metricType);
+        List<BiMetricBO> bos = metricBiAnalysisService.listMetrics(
+                trimToNull(name), trimToNull(subjectCode), trimToNull(metricType));
         List<MetricBiListItem> result = bos.stream()
                 .map(metricBiAnalysisAdapterConvert::toMetricBiListItem)
                 .toList();
@@ -56,7 +57,8 @@ public class MetricBiListRpcController {
             @RequestParam(name = "name", required = false) String name,
             @RequestParam(name = "categoryId", required = false) String categoryId) {
 
-        List<BiDimensionBO> bos = metricBiAnalysisService.listDimensions(name, categoryId);
+        List<BiDimensionBO> bos = metricBiAnalysisService.listDimensions(
+                trimToNull(name), trimToNull(categoryId));
         List<DimensionBiListItem> result = bos.stream()
                 .map(metricBiAnalysisAdapterConvert::toDimensionBiListItem)
                 .toList();
@@ -70,10 +72,17 @@ public class MetricBiListRpcController {
     public Response<List<DimensionValueItem>> listDimensionValues(
             @PathVariable("dimCode") String dimCode) {
 
-        List<DimensionValueBO> bos = metricBiAnalysisService.listDimensionValues(dimCode);
+        List<DimensionValueBO> bos = metricBiAnalysisService.listDimensionValues(trimToNull(dimCode));
         List<DimensionValueItem> result = bos.stream()
                 .map(metricBiAnalysisAdapterConvert::toDimensionValueItem)
                 .toList();
         return Response.success(result);
+    }
+
+    /**
+     * 去除首尾空白，空字符串/纯空白转为 null
+     */
+    private String trimToNull(String value) {
+        return (value == null || value.isBlank()) ? null : value.trim();
     }
 }
