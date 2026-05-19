@@ -129,7 +129,7 @@
 | bizCaliber | 是 | 业务口径描述 |
 | techCaliber | 否 | 技术口径/SQL描述 |
 | statFunc | 是 | SUM/AVG/COUNT/COUNT_DISTINCT/MAX/MIN |
-| dsName | 是 | 数据源名称（如 cyan_iceberg） |
+| dsName | 是 | 默认写iceberg |
 | dbName | 是 | 数据库名（如 ods） |
 | tblName | 是 | 表名 |
 | colName | 是 | 统计字段名 |

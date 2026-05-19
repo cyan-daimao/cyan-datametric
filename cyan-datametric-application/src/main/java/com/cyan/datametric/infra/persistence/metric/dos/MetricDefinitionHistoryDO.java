@@ -10,7 +10,7 @@ import java.time.LocalDateTime;
 @Data
 @TableName("metric_definition_history")
 public class MetricDefinitionHistoryDO {
-    @TableId(type = IdType.AUTO)
+    @TableId(type = IdType.ASSIGN_ID)
     private Long id;
     private String metricCode;
     private String metricName;
