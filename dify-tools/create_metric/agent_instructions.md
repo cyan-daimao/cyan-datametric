@@ -12,8 +12,7 @@
 | **模型** | GPT-4 / Claude 3.5 / DeepSeek-V3 |
 | **工具** | 绑定以下已有工具： |
 | | 1. `cyan-dataman/dify-tool-metadata-rpc.yaml` → **元数据查询**（`listMetadataTables`、`getTableColumns`） |
-| | 2. `cyan-datametric/dify-tools/list_metadata.yaml` → **指标维度查询**（`listMetrics`、`listDimensions`） |
-| | 3. `cyan-datametric/dify-tools/create_metric/list_subjects.yaml` → **主题域查询**（`listSubjects`） |
+| | 2. `cyan-datametric/dify-tools/list_metadata.yaml` → **指标平台元数据查询**（`listSubjects`、`listMetrics`、`listDimensions`） |
 
 ## 3. System Prompt（核心）
 
@@ -232,10 +231,6 @@
 - 导入文件：`cyan-datametric/dify-tools/list_metadata.yaml`
 - Dify 中配置为 **Function / Tool** 类型
 
-### 4.3 主题域查询（cyan-datametric）
-- 导入文件：`cyan-datametric/dify-tools/create_metric/list_subjects.yaml`
-- Dify 中配置为 **Function / Tool** 类型
-
 ## 5. 测试用例
 
 | 用户输入 | 预期行为 |
@@ -249,9 +244,8 @@
 ```
 dify-tools/
 ├── create_metric/
-│   ├── agent_instructions.md      # 本文件
-│   └── list_subjects.yaml         # 主题域查询工具
+│   └── agent_instructions.md      # 本文件：指标创建 Agent 配置
 ├── analysis.yaml                  # 已有：ChatBI 分析执行
-├── list_metadata.yaml             # 已有：ChatBI 元数据查询
+├── list_metadata.yaml             # 已有：指标平台元数据查询（主题域+指标+维度）
 └── agent_instructions.md          # 已有：ChatBI Agent 配置
 ```
