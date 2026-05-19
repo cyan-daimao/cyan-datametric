@@ -1,0 +1,62 @@
+openapi: 3.0.0
+info:
+  title: Metric Subject API
+  description: |
+    查询指标主题域列表。用于指标创建时确认指标所属的主题域。
+  version: 1.0.0
+servers:
+  - url: http://10.0.0.2:8080
+    description: cyan-datametric 服务
+paths:
+  /rpc/v1/metrics/subjects:
+    get:
+      operationId: listSubjects
+      summary: 查询主题域树形列表
+      description: |
+        获取所有指标主题域的树形结构列表。每个主题域包含编码、名称、描述、层级、子节点等信息。
+        当用户不确定指标所属主题域时调用此接口。
+      responses:
+        '200':
+          description: 主题域列表查询成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                    description: 响应码，200 表示成功
+                  message:
+                    type: string
+                  data:
+                    type: array
+                    description: 主题域树形列表
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                          description: 主题域ID
+                        subjectCode:
+                          type: string
+                          description: 主题域编码（创建指标时使用）
+                        subjectName:
+                          type: string
+                          description: 主题域名称（展示用）
+                        subjectDesc:
+                          type: string
+                          description: 主题域描述
+                        parentId:
+                          type: string
+                          description: 父节点ID
+                        level:
+                          type: integer
+                          description: 层级
+                        sortOrder:
+                          type: integer
+                          description: 排序号
+                        children:
+                          type: array
+                          description: 子节点列表
+                          items:
+                            type: object
