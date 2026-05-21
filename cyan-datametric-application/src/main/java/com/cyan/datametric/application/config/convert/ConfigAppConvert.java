@@ -1,6 +1,6 @@
 package com.cyan.datametric.application.config.convert;
 
-import com.cyan.arch.common.mapstruct.MapstructConvert;
+import com.cyan.arch.base.mapstruct.MapstructConvert;
 import com.cyan.datametric.application.config.bo.DimensionBO;
 import com.cyan.datametric.application.config.bo.ModifierBO;
 import com.cyan.datametric.application.config.bo.TimePeriodBO;

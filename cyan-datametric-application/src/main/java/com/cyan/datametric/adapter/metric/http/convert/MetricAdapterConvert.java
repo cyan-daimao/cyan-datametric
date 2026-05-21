@@ -1,6 +1,6 @@
 package com.cyan.datametric.adapter.metric.http.convert;
 
-import com.cyan.arch.common.mapstruct.MapstructConvert;
+import com.cyan.arch.base.mapstruct.MapstructConvert;
 import com.cyan.datametric.adapter.metric.http.dto.*;
 import com.cyan.datametric.application.metric.bo.*;
 import org.mapstruct.Mapper;

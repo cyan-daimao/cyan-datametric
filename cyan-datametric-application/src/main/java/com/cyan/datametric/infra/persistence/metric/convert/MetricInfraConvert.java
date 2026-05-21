@@ -1,6 +1,6 @@
 package com.cyan.datametric.infra.persistence.metric.convert;
 
-import com.cyan.arch.common.mapstruct.MapstructConvert;
+import com.cyan.arch.base.mapstruct.MapstructConvert;
 import com.cyan.arch.common.util.JSON;
 import com.cyan.datametric.domain.metric.Metric;
 import com.cyan.datametric.domain.metric.MetricAtomicExt;

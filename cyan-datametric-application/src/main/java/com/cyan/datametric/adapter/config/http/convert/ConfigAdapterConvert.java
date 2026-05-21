@@ -1,6 +1,6 @@
 package com.cyan.datametric.adapter.config.http.convert;
 
-import com.cyan.arch.common.mapstruct.MapstructConvert;
+import com.cyan.arch.base.mapstruct.MapstructConvert;
 import com.cyan.datametric.adapter.config.http.dto.DimensionDTO;
 import com.cyan.datametric.adapter.config.http.dto.ModifierDTO;
 import com.cyan.datametric.adapter.config.http.dto.TimePeriodDTO;

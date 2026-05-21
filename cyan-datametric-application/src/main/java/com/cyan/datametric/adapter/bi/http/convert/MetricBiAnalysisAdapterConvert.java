@@ -1,6 +1,6 @@
 package com.cyan.datametric.adapter.bi.http.convert;
 
-import com.cyan.arch.common.mapstruct.MapstructConvert;
+import com.cyan.arch.base.mapstruct.MapstructConvert;
 import com.cyan.datametric.adapter.bi.http.dto.BiDimensionDTO;
 import com.cyan.datametric.adapter.bi.http.dto.BiMetricDTO;
 import com.cyan.datametric.adapter.bi.http.dto.ChartDataDTO;
