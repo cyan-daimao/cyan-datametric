@@ -4,7 +4,6 @@ import com.cyan.arch.common.api.Assert;
 import com.cyan.arch.common.api.BusinessException;
 import com.cyan.arch.common.api.Page;
 import com.cyan.arch.common.api.Response;
-import com.cyan.dataauth.client.AuthCheckClient;
 import com.cyan.dataauth.client.AuthMetricClient;
 import com.cyan.dataauth.cmd.MetricCheckCmd;
 import com.cyan.dataauth.cmd.MetricFilterSqlCmd;
@@ -12,7 +11,6 @@ import com.cyan.dataauth.dto.MetricCheckResult;
 import com.cyan.dataauth.dto.MetricResourceDTO;
 import com.cyan.dataauth.dto.UserSecurityLevelDTO;
 import com.cyan.dataauth.enums.SecurityLevel;
-import com.cyan.datagateway.client.SqlGatewayClient;
 import com.cyan.datagateway.client.cmd.SqlExecuteCmd;
 import com.cyan.datagateway.client.dto.SqlExecuteResultDTO;
 import com.cyan.datametric.application.bi.MetricBiAnalysisService;
@@ -37,6 +35,8 @@ import com.cyan.datametric.domain.metric.query.MetricPageQuery;
 import com.cyan.datametric.domain.metric.repository.MetricRepository;
 import com.cyan.datametric.domain.metric.subject.MetricSubject;
 import com.cyan.datametric.domain.metric.subject.repository.MetricSubjectRepository;
+import com.cyan.datametric.infra.gateway.AuthCheckGateway;
+import com.cyan.datametric.infra.gateway.SqlGateway;
 import com.cyan.employee.client.dto.EmployeeDTO;
 import com.cyan.employee.login.filter.UserContextHolder;
 import lombok.RequiredArgsConstructor;
@@ -71,10 +71,10 @@ public class MetricBiAnalysisServiceImpl implements MetricBiAnalysisService {
     private final DimensionRepository dimensionRepository;
     private final DimensionCategoryRepository dimensionCategoryRepository;
     private final MetricSubjectRepository metricSubjectRepository;
-    private final SqlGatewayClient sqlGatewayClient;
+    private final SqlGateway sqlGateway;
     private final MetricBiAnalysisAppConvert metricBiAnalysisAppConvert;
     private final AuthMetricClient authMetricClient;
-    private final AuthCheckClient authCheckClient;
+    private final AuthCheckGateway authCheckGateway;
 
     @Value("${cyan.datametric.default-catalog:iceberg}")
     private String defaultCatalog;
@@ -119,7 +119,7 @@ public class MetricBiAnalysisServiceImpl implements MetricBiAnalysisService {
                 .setPassport(executor);
 
         com.cyan.arch.common.api.Response<SqlExecuteResultDTO> response =
-                sqlGatewayClient.executeMetricSql(executeCmd);
+                sqlGateway.executeMetricSql(executeCmd);
 
         long costTimeMs = System.currentTimeMillis() - startTime;
         String chartType = cmd.getChartType();
@@ -324,7 +324,7 @@ public class MetricBiAnalysisServiceImpl implements MetricBiAnalysisService {
                 .setPassport("system");
 
         com.cyan.arch.common.api.Response<SqlExecuteResultDTO> response =
-                sqlGatewayClient.executeMetricSql(executeCmd);
+                sqlGateway.executeMetricSql(executeCmd);
 
         if (response == null || response.getCode() != 200 || response.getData() == null || response.getData().getData() == null) {
             log.warn("查询维度值失败: dimCode={}, message={}", dimCode, response != null ? response.getMessage() : "null");
@@ -356,7 +356,7 @@ public class MetricBiAnalysisServiceImpl implements MetricBiAnalysisService {
             return "L1";
         }
         try {
-            Response<UserSecurityLevelDTO> resp = authCheckClient.getUserMaxSecurityLevel(passport);
+            Response<UserSecurityLevelDTO> resp = authCheckGateway.getUserMaxSecurityLevel(passport);
             if (resp != null && resp.getData() != null && resp.getData().getMaxSecurityLevel() != null) {
                 return resp.getData().getMaxSecurityLevel();
             }

@@ -33,6 +33,7 @@ CREATE TABLE IF NOT EXISTS metric_atomic (
     tbl_name VARCHAR(128) NOT NULL COMMENT '表名称',
     col_name VARCHAR(128) NOT NULL COMMENT '字段名称',
     filter_condition JSON COMMENT '过滤条件JSON',
+    deleted_at DATETIME DEFAULT NULL COMMENT '逻辑删除时间',
     UNIQUE KEY uk_metric_id (metric_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='原子指标扩展表';
 
@@ -45,6 +46,7 @@ CREATE TABLE IF NOT EXISTS metric_derived (
     modifier_ids JSON COMMENT '修饰词ID列表JSON',
     dimension_ids JSON COMMENT '维度ID列表JSON',
     group_by_fields JSON COMMENT '分组字段JSON',
+    deleted_at DATETIME DEFAULT NULL COMMENT '逻辑删除时间',
     UNIQUE KEY uk_metric_id (metric_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='派生指标扩展表';
 
@@ -54,6 +56,7 @@ CREATE TABLE IF NOT EXISTS metric_composite (
     metric_id BIGINT NOT NULL COMMENT '指标定义ID',
     formula TEXT NOT NULL COMMENT '计算公式',
     metric_refs JSON NOT NULL COMMENT '引用的指标ID列表JSON',
+    deleted_at DATETIME DEFAULT NULL COMMENT '逻辑删除时间',
     UNIQUE KEY uk_metric_id (metric_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='复合指标扩展表';
 
@@ -103,6 +106,7 @@ CREATE TABLE IF NOT EXISTS metric_lineage (
     level INT NOT NULL DEFAULT 1 COMMENT '血缘层级',
     create_by VARCHAR(64) COMMENT '创建人',
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    deleted_at DATETIME DEFAULT NULL COMMENT '逻辑删除时间',
     INDEX idx_metric_id (metric_id),
     INDEX idx_parent_metric_id (parent_metric_id),
     INDEX idx_lineage_type (lineage_type)
@@ -160,6 +164,7 @@ CREATE TABLE IF NOT EXISTS metric_favorite (
     metric_id BIGINT NOT NULL COMMENT '指标ID',
     user_id VARCHAR(64) NOT NULL COMMENT '用户ID',
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    deleted_at DATETIME DEFAULT NULL COMMENT '逻辑删除时间',
     UNIQUE KEY uk_metric_user (metric_id, user_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='指标收藏表';
 
@@ -246,6 +251,7 @@ CREATE TABLE IF NOT EXISTS metric_definition_history (
     update_by VARCHAR(64) COMMENT '修改人',
     created_at DATETIME COMMENT '创建时间',
     updated_at DATETIME COMMENT '更新时间',
+    deleted_at DATETIME DEFAULT NULL COMMENT '逻辑删除时间',
     ext_json JSON COMMENT '扩展信息快照（原子/派生/复合）',
     snapshot_time DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '快照时间',
     INDEX idx_metric_code (metric_code),

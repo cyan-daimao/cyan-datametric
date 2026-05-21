@@ -22,9 +22,9 @@ import com.cyan.datametric.domain.metric.repository.MetricRepository;
 import com.cyan.datametric.enums.MetricStatus;
 import com.cyan.datametric.enums.MetricType;
 import com.cyan.datametric.enums.PeriodType;
-import com.cyan.dataauth.client.AuthCheckClient;
 import com.cyan.dataauth.dto.UserSecurityLevelDTO;
 import com.cyan.dataauth.enums.SecurityLevel;
+import com.cyan.datametric.infra.gateway.AuthCheckGateway;
 import com.cyan.datametric.infra.util.SnowflakeIdUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -53,7 +53,7 @@ public class MetricServiceImpl implements MetricService {
     private final TimePeriodRepository timePeriodRepository;
     private final MetricAppConvert metricAppConvert;
     private final MetricBOAssembler metricBOAssembler;
-    private final AuthCheckClient authCheckClient;
+    private final AuthCheckGateway authCheckGateway;
 
     @Value("${datametric.default-datasource:cyan_iceberg}")
     private String defaultDatasource;
@@ -386,7 +386,7 @@ public class MetricServiceImpl implements MetricService {
      */
     private String getUserMaxSecurityLevel(String passport) {
         try {
-            com.cyan.arch.common.api.Response<UserSecurityLevelDTO> resp = authCheckClient.getUserMaxSecurityLevel(passport);
+            com.cyan.arch.common.api.Response<UserSecurityLevelDTO> resp = authCheckGateway.getUserMaxSecurityLevel(passport);
             if (resp != null && resp.getData() != null && resp.getData().getMaxSecurityLevel() != null) {
                 return resp.getData().getMaxSecurityLevel();
             }

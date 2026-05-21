@@ -100,6 +100,11 @@ public class Metric {
     private LocalDateTime updatedAt;
 
     /**
+     * 逻辑删除时间
+     */
+    private LocalDateTime deletedAt;
+
+    /**
      * 原子指标扩展
      */
     private MetricAtomicExt atomicExt;

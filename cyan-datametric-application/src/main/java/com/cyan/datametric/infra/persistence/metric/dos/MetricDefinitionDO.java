@@ -1,5 +1,6 @@
 package com.cyan.datametric.infra.persistence.metric.dos;
 
+import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableLogic;
@@ -29,7 +30,7 @@ public class MetricDefinitionDO {
     /**
      * 主键
      */
-    @TableId("id")
+    @TableId(value = "id", type = IdType.ASSIGN_ID)
     private Long id;
 
     /**

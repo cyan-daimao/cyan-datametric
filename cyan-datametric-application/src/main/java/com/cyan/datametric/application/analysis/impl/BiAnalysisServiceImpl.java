@@ -2,7 +2,6 @@ package com.cyan.datametric.application.analysis.impl;
 
 import com.cyan.arch.common.api.BusinessException;
 import com.cyan.arch.common.api.Response;
-import com.cyan.datagateway.client.SqlGatewayClient;
 import com.cyan.datagateway.client.cmd.SqlExecuteCmd;
 import com.cyan.datagateway.client.dto.SqlExecuteResultDTO;
 import com.cyan.datametric.application.analysis.BiAnalysisService;
@@ -15,7 +14,8 @@ import com.cyan.datametric.domain.config.repository.DimensionRepository;
 import com.cyan.datametric.domain.metric.Metric;
 import com.cyan.datametric.domain.metric.MetricAtomicExt;
 import com.cyan.datametric.domain.metric.repository.MetricRepository;
-import com.cyan.dataman.client.table.TableRelationClient;
+import com.cyan.datametric.infra.gateway.SqlGateway;
+import com.cyan.datametric.infra.gateway.TableRelationGateway;
 import com.cyan.dataman.client.table.dto.JoinPathsRequestDTO;
 import com.cyan.dataman.client.table.dto.TableRelationDTO;
 import lombok.RequiredArgsConstructor;
@@ -41,8 +41,8 @@ public class BiAnalysisServiceImpl implements BiAnalysisService {
 
     private final MetricRepository metricRepository;
     private final DimensionRepository dimensionRepository;
-    private final SqlGatewayClient sqlGatewayClient;
-    private final TableRelationClient tableRelationClient;
+    private final SqlGateway sqlGateway;
+    private final TableRelationGateway tableRelationGateway;
     private final MetricBiAnalysisAppConvert metricBiAnalysisAppConvert;
 
     @Value("${cyan.datametric.default-catalog:iceberg}")
@@ -56,7 +56,7 @@ public class BiAnalysisServiceImpl implements BiAnalysisService {
             SqlExecuteCmd executeCmd = new SqlExecuteCmd()
                     .setSql(sql)
                     .setPassport(executor);
-            Response<SqlExecuteResultDTO> response = sqlGatewayClient.executeStarRocksSql(executeCmd);
+            Response<SqlExecuteResultDTO> response = sqlGateway.executeStarRocksSql(executeCmd);
             SqlExecuteResultDTO result = response.getData();
             long cost = System.currentTimeMillis() - start;
 
@@ -801,7 +801,7 @@ public class BiAnalysisServiceImpl implements BiAnalysisService {
                         })
                         .toList());
         try {
-            Response<List<TableRelationDTO>> response = tableRelationClient.findJoinPaths(request);
+            Response<List<TableRelationDTO>> response = tableRelationGateway.findJoinPaths(request);
             if (response == null) {
                 log.error("查询 dataman 表关联关系失败, fact={}.{}.{}, dimTables={}, response=null",
                         factCatalog, factSchema, factTable, dimTableRefs);
