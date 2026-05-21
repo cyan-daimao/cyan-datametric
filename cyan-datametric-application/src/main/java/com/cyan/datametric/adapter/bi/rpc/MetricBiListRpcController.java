@@ -10,13 +10,9 @@ import com.cyan.datametric.client.ChatBiRpcClient;
 import com.cyan.datametric.client.DimensionBiListItem;
 import com.cyan.datametric.client.DimensionValueItem;
 import com.cyan.datametric.client.MetricBiListItem;
-import com.cyan.datametric.client.dto.MetricBiAnalysisCmd;
-import com.cyan.datametric.client.dto.MetricBiChartDataDTO;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -82,24 +78,6 @@ public class MetricBiListRpcController implements ChatBiRpcClient {
                 .map(metricBiAnalysisAdapterConvert::toDimensionValueItem)
                 .toList();
         return Response.success(result);
-    }
-
-    /**
-     * 执行指标分析
-     */
-    @Override
-    @PostMapping("/analysis/execute")
-    public Response<MetricBiChartDataDTO> executeAnalysis(@RequestBody MetricBiAnalysisCmd cmd) {
-        throw new UnsupportedOperationException("BI 分析请在 BiAnalysisController / MetricBiAnalysisAgentRPC 中调用");
-    }
-
-    /**
-     * 预览 SQL（不执行）
-     */
-    @Override
-    @PostMapping("/analysis/preview-sql")
-    public Response<String> previewSql(@RequestBody MetricBiAnalysisCmd cmd) {
-        throw new UnsupportedOperationException("SQL 预览请在 BiAnalysisController / MetricBiAnalysisAgentRPC 中调用");
     }
 
     /**
