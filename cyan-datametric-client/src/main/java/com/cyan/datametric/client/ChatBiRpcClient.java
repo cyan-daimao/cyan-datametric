@@ -40,5 +40,6 @@ public interface ChatBiRpcClient {
     @GetMapping("/dimensions/{dimCode}/values")
     Response<List<DimensionValueItem>> listDimensionValues(
             @PathVariable("dimCode") String dimCode);
+}
 
 
