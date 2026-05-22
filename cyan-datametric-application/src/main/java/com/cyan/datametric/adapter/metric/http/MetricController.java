@@ -4,7 +4,9 @@ import com.cyan.arch.common.api.Response;
 import com.cyan.datametric.adapter.common.PageResultDTO;
 import com.cyan.datametric.adapter.metric.http.dto.*;
 import com.cyan.datametric.application.metric.MetricService;
-import com.cyan.datametric.application.metric.bo.*;
+import com.cyan.datametric.application.metric.bo.LineageTreeBO;
+import com.cyan.datametric.application.metric.bo.MetricBO;
+import com.cyan.datametric.application.metric.bo.MetricVersionBO;
 import com.cyan.datametric.application.metric.cmd.*;
 import com.cyan.datametric.domain.metric.query.MetricPageQuery;
 import com.cyan.employee.login.filter.UserContextHolder;
@@ -49,15 +51,17 @@ public class MetricController {
 
     @PostMapping("/atomic")
     public Response<MetricDTO> createAtomic(@RequestBody @Valid AtomicMetricCmd cmd) {
-        cmd.setCreateBy(UserContextHolder.getCurrentEmployee().getPassport());
-        cmd.setUpdateBy(UserContextHolder.getCurrentEmployee().getPassport());
+        cmd.setCreateBy(UserContextHolder.getCurrentEmployee().getPassport())
+                .setUpdateBy(UserContextHolder.getCurrentEmployee().getPassport())
+                .setDsName("iceberg");
         MetricBO bo = metricService.createAtomic(cmd);
         return Response.success(metricAdapterConvert.toMetricDTO(bo));
     }
 
     @PutMapping("/atomic/{id}")
     public Response<MetricDTO> updateAtomic(@PathVariable("id") String id, @RequestBody @Valid AtomicMetricCmd cmd) {
-        cmd.setUpdateBy(UserContextHolder.getCurrentEmployee().getPassport());
+        cmd.setUpdateBy(UserContextHolder.getCurrentEmployee().getPassport())
+                .setDsName("iceberg");
         MetricBO bo = metricService.updateAtomic(id, cmd);
         return Response.success(metricAdapterConvert.toMetricDTO(bo));
     }
