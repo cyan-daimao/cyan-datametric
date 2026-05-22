@@ -14,7 +14,7 @@ import java.util.List;
  * @author cy.Y
  * @since 1.0.0
  */
-@FeignClient(name = "cyan-datametric", contextId = "cyan-datametric.chatbi", path = "/rpc/v1/metrics/bi")
+@FeignClient(name = "cyan-datametric", contextId = "chatBiRpcClient", path = "/rpc/v1/metrics/bi", url = "${feign.cyan-datametric.url:}")
 public interface ChatBiRpcClient {
 
     /**
@@ -41,5 +41,4 @@ public interface ChatBiRpcClient {
     Response<List<DimensionValueItem>> listDimensionValues(
             @PathVariable("dimCode") String dimCode);
 }
-
 

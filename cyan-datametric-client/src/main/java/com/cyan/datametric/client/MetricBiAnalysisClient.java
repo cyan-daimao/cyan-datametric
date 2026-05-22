@@ -13,7 +13,7 @@ import org.springframework.web.bind.annotation.RequestBody;
  * @author cy.Y
  * @since 1.0.0
  */
-@FeignClient(name = "cyan-datametric", contextId = "cyan-datametric.analysis", path = "/rpc/v1/metrics/bi/analysis")
+@FeignClient(name = "cyan-datametric", contextId = "metricBiAnalysisClient", path = "/rpc/v1/metrics/bi/analysis", url = "${feign.cyan-datametric.url:}")
 public interface MetricBiAnalysisClient {
 
     /**
