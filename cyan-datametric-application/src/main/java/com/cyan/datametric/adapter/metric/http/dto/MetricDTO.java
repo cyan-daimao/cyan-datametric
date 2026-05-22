@@ -1,5 +1,6 @@
 package com.cyan.datametric.adapter.metric.http.dto;
 
+import com.fasterxml.jackson.annotation.JsonFormat;
 import lombok.Data;
 import lombok.experimental.Accessors;
 
@@ -32,5 +33,6 @@ public class MetricDTO {
     private String tblName;
     private String colName;
     private Integer version;
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss", timezone = "GMT+8")
     private LocalDateTime updatedAt;
 }

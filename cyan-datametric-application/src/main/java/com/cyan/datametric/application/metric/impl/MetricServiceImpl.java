@@ -61,10 +61,8 @@ public class MetricServiceImpl implements MetricService {
 
     @Override
     public Page<MetricBO> page(MetricPageQuery query, String currentUser) {
-        String userMaxLevel = getUserMaxSecurityLevel(currentUser);
         com.cyan.arch.common.api.Page<Metric> page = metricRepository.page(query);
         List<MetricBO> list = page.getData().stream()
-                .filter(m -> canAccess(m.getSecurityLevel(), userMaxLevel))
                 .map(metricBOAssembler::assembleBasic)
                 .toList();
         metricBOAssembler.fillSubjectName(list);
