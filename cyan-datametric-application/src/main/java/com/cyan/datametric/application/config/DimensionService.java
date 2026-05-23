@@ -46,6 +46,33 @@ public class DimensionService {
         return bo;
     }
 
+    /**
+     * 按维度编码幂等创建或更新维度
+     *
+     * @param cmd 维度命令
+     * @return 维度业务对象
+     */
+    public DimensionBO upsertByDimCode(DimensionCmd cmd) {
+        if (cmd.getDimCode() == null || cmd.getDimCode().isBlank()) {
+            cmd.setDimCode("DIM" + SnowflakeIdUtil.nextId());
+        }
+        Assert.isTrue(BuiltinTimeDimension.of(cmd.getDimCode()) == null,
+                new BusinessException("维度编码 '" + cmd.getDimCode() + "' 为系统内置维度，不可创建"));
+        Dimension existing = dimensionRepository.findByDimCode(cmd.getDimCode());
+        if (existing == null) {
+            return create(cmd);
+        }
+        Dimension dimension = configAppConvert.toDimension(cmd);
+        dimension.setId(existing.getId());
+        dimension.setDimCode(existing.getDimCode());
+        dimension.setCreateBy(existing.getCreateBy());
+        dimension.setCreatedAt(existing.getCreatedAt());
+        dimension = dimension.update(dimensionRepository);
+        DimensionBO bo = configAppConvert.toDimensionBO(dimension);
+        assembleCategoryName(bo);
+        return bo;
+    }
+
     public DimensionBO update(String id, DimensionCmd cmd) {
         BuiltinTimeDimension builtin = BuiltinTimeDimension.of(id);
         if (builtin != null) {

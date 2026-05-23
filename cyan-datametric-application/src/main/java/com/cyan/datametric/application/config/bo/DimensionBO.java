@@ -28,6 +28,9 @@ public class DimensionBO {
     private String tableName;
     private String columnName;
     private String displayColumn;
+    private String sourceType;
+    private String sourceExpr;
+    private String sourceTable;
     private String description;
     private LocalDateTime updatedAt;
 }

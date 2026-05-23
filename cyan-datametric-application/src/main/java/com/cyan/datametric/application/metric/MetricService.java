@@ -31,6 +31,11 @@ public interface MetricService {
     MetricBO createAtomic(AtomicMetricCmd cmd);
 
     /**
+     * 按指标编码幂等创建或更新原子指标
+     */
+    MetricBO upsertAtomicByMetricCode(AtomicMetricCmd cmd);
+
+    /**
      * 更新原子指标
      */
     MetricBO updateAtomic(String id, AtomicMetricCmd cmd);

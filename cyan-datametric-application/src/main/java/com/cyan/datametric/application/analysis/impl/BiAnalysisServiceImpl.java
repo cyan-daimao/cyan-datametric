@@ -540,19 +540,49 @@ public class BiAnalysisServiceImpl implements BiAnalysisService {
         if (dim == null) {
             throw new BusinessException("维度 '" + dimCode + "' 不存在");
         }
-        if (!StringUtils.hasText(dim.getColumnName())) {
+        String columnExpr = resolveDimensionExpression(dim);
+        if (!StringUtils.hasText(columnExpr)) {
             throw new BusinessException("维度 '" + dimCode + "' 未配置关联字段");
         }
 
         DimensionInfo info = new DimensionInfo();
         info.dimCode = dimCode;
-        info.columnName = "`" + dim.getColumnName() + "`";
+        info.columnName = columnExpr;
         if (StringUtils.hasText(dim.getDisplayColumn())) {
             info.displayColumn = "`" + dim.getDisplayColumn() + "`";
         }
         info.alias = StringUtils.hasText(ref.getAlias()) ? ref.getAlias() : dim.getDimName();
         info.tableName = buildDimensionTableRef(dim.getSchemaName(), dim.getTableName());
         return info;
+    }
+
+    /**
+     * 解析维度 SQL 表达式
+     */
+    private String resolveDimensionExpression(Dimension dim) {
+        String sourceType = StringUtils.hasText(dim.getSourceType()) ? dim.getSourceType() : "COLUMN";
+        return switch (sourceType) {
+            case "JSON_PATH" -> "JSON_VALUE(properties, '" + escapeSql(resolveJsonPath(dim)) + "')";
+            case "EXPRESSION" -> dim.getSourceExpr();
+            default -> "`" + dim.getColumnName() + "`";
+        };
+    }
+
+    /**
+     * 解析 JSON Path
+     */
+    private String resolveJsonPath(Dimension dim) {
+        if (StringUtils.hasText(dim.getSourceExpr())) {
+            return dim.getSourceExpr();
+        }
+        return "$.properties." + dim.getColumnName();
+    }
+
+    /**
+     * SQL 字符串转义
+     */
+    private String escapeSql(String value) {
+        return value == null ? "" : value.replace("'", "''");
     }
 
     // ==================== 过滤条件解析 ====================

@@ -42,6 +42,9 @@ public interface ConfigAppConvert {
         d.setTableName(cmd.getTableName());
         d.setColumnName(cmd.getColumnName());
         d.setDisplayColumn(cmd.getDisplayColumn());
+        d.setSourceType(cmd.getSourceType());
+        d.setSourceExpr(cmd.getSourceExpr());
+        d.setSourceTable(cmd.getSourceTable());
         d.setDescription(cmd.getDescription());
         d.setCreateBy(cmd.getCreateBy());
         d.setUpdateBy(cmd.getUpdateBy());

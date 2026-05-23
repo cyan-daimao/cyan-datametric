@@ -92,6 +92,9 @@ public interface ConfigInfraConvert {
         d.setTableName(dimensionDO.getTableName());
         d.setColumnName(dimensionDO.getColumnName());
         d.setDisplayColumn(dimensionDO.getDisplayColumn());
+        d.setSourceType(dimensionDO.getSourceType());
+        d.setSourceExpr(dimensionDO.getSourceExpr());
+        d.setSourceTable(dimensionDO.getSourceTable());
         d.setDescription(dimensionDO.getDescription());
         d.setCreateBy(dimensionDO.getCreateBy());
         d.setUpdateBy(dimensionDO.getUpdateBy());
@@ -116,6 +119,9 @@ public interface ConfigInfraConvert {
         d.setTableName(dimension.getTableName());
         d.setColumnName(dimension.getColumnName());
         d.setDisplayColumn(dimension.getDisplayColumn());
+        d.setSourceType(dimension.getSourceType());
+        d.setSourceExpr(dimension.getSourceExpr());
+        d.setSourceTable(dimension.getSourceTable());
         d.setDescription(dimension.getDescription());
         d.setCreateBy(dimension.getCreateBy());
         d.setUpdateBy(dimension.getUpdateBy());

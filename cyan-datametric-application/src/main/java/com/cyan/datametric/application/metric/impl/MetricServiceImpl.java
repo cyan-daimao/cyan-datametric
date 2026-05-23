@@ -99,6 +99,16 @@ public class MetricServiceImpl implements MetricService {
 
     @Override
     @Transactional
+    public MetricBO upsertAtomicByMetricCode(AtomicMetricCmd cmd) {
+        Metric existing = metricRepository.findByMetricCode(cmd.getMetricCode());
+        if (existing == null) {
+            return createAtomic(cmd);
+        }
+        return updateAtomic(existing.getId(), cmd);
+    }
+
+    @Override
+    @Transactional
     public MetricBO updateAtomic(String id, AtomicMetricCmd cmd) {
         Metric existing = metricRepository.findById(id);
         Assert.notNull(existing, new BusinessException("指标不存在"));

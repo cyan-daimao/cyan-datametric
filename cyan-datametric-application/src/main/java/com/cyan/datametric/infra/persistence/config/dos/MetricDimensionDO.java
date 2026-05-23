@@ -92,6 +92,24 @@ public class MetricDimensionDO {
     private String displayColumn;
 
     /**
+     * 来源类型：COLUMN/JSON_PATH/EXPRESSION
+     */
+    @TableField("source_type")
+    private String sourceType;
+
+    /**
+     * 来源表达式
+     */
+    @TableField("source_expr")
+    private String sourceExpr;
+
+    /**
+     * 来源事实表
+     */
+    @TableField("source_table")
+    private String sourceTable;
+
+    /**
      * 描述
      */
     @TableField("description")

@@ -1,17 +1,34 @@
-package com.cyan.datametric.application.config.cmd;
+package com.cyan.datametric.application.collection.cmd;
 
 import lombok.Data;
+import lombok.experimental.Accessors;
 
 import java.util.List;
 
 /**
- * 公共维度命令
+ * 采集属性维度同步命令
  *
  * @author cy.Y
  * @since 1.0.0
  */
 @Data
-public class DimensionCmd {
+@Accessors(chain = true)
+public class CollectionDimensionUpsertCmd {
+
+    /**
+     * 采集属性ID
+     */
+    private String propertyId;
+
+    /**
+     * 采集属性编码
+     */
+    private String propertyCode;
+
+    /**
+     * 采集属性名称
+     */
+    private String propertyName;
 
     /**
      * 维度编码
@@ -44,27 +61,12 @@ public class DimensionCmd {
     private String categoryId;
 
     /**
-     * 数仓维表所在 schema
+     * 来源表
      */
-    private String schemaName;
+    private String sourceTable;
 
     /**
-     * 关联数仓维表名
-     */
-    private String tableName;
-
-    /**
-     * 关联维表字段名
-     */
-    private String columnName;
-
-    /**
-     * 显示字段名（BI展示用）
-     */
-    private String displayColumn;
-
-    /**
-     * 来源类型：COLUMN/JSON_PATH/EXPRESSION
+     * 来源类型
      */
     private String sourceType;
 
@@ -74,9 +76,9 @@ public class DimensionCmd {
     private String sourceExpr;
 
     /**
-     * 来源事实表
+     * 字段名称
      */
-    private String sourceTable;
+    private String columnName;
 
     /**
      * 描述
@@ -84,12 +86,12 @@ public class DimensionCmd {
     private String description;
 
     /**
-     * 创建人
+     * 负责人
      */
-    private String createBy;
+    private String owner;
 
     /**
-     * 修改人
+     * 操作人
      */
-    private String updateBy;
+    private String operator;
 }
