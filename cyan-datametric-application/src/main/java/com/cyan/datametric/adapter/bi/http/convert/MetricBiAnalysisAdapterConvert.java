@@ -5,10 +5,16 @@ import com.cyan.datametric.adapter.bi.http.dto.BiDimensionDTO;
 import com.cyan.datametric.adapter.bi.http.dto.BiMetricDTO;
 import com.cyan.datametric.adapter.bi.http.dto.ChartDataDTO;
 import com.cyan.datametric.adapter.bi.http.dto.DimensionValueDTO;
+import com.cyan.datametric.adapter.bi.http.dto.MetricAssociationGraphDTO;
+import com.cyan.datametric.adapter.bi.http.dto.MetricAssociationSearchDTO;
+import com.cyan.datametric.adapter.bi.http.dto.MetricAssociationSearchRequest;
 import com.cyan.datametric.application.bi.bo.BiDimensionBO;
 import com.cyan.datametric.application.bi.bo.BiMetricBO;
 import com.cyan.datametric.application.bi.bo.ChartDataBO;
 import com.cyan.datametric.application.bi.bo.DimensionValueBO;
+import com.cyan.datametric.application.bi.bo.MetricAssociationGraphBO;
+import com.cyan.datametric.application.bi.bo.MetricAssociationSearchBO;
+import com.cyan.datametric.application.bi.query.MetricAssociationSearchQuery;
 import com.cyan.datametric.client.DimensionBiListItem;
 import com.cyan.datametric.client.DimensionValueItem;
 import com.cyan.datametric.client.MetricBiListItem;
@@ -31,6 +37,12 @@ public interface MetricBiAnalysisAdapterConvert {
     BiDimensionDTO toBiDimensionDTO(BiDimensionBO bo);
 
     DimensionValueDTO toDimensionValueDTO(DimensionValueBO bo);
+
+    MetricAssociationSearchQuery toMetricAssociationSearchQuery(MetricAssociationSearchRequest request);
+
+    MetricAssociationSearchDTO toMetricAssociationSearchDTO(MetricAssociationSearchBO bo);
+
+    MetricAssociationGraphDTO toMetricAssociationGraphDTO(MetricAssociationGraphBO bo);
 
     ChartDataDTO toChartDataDTO(ChartDataBO bo);
 

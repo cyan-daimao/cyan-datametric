@@ -23,12 +23,16 @@ import com.cyan.datametric.application.bi.bo.BiDimensionBO;
 import com.cyan.datametric.application.bi.bo.BiMetricBO;
 import com.cyan.datametric.application.bi.bo.ChartDataBO;
 import com.cyan.datametric.application.bi.bo.DimensionValueBO;
+import com.cyan.datametric.application.bi.bo.MetricAssociationGraphBO;
+import com.cyan.datametric.application.bi.bo.MetricAssociationSearchBO;
 import com.cyan.datametric.application.bi.convert.MetricBiAnalysisAppConvert;
+import com.cyan.datametric.application.bi.query.MetricAssociationSearchQuery;
 import com.cyan.datametric.client.dto.MetricBiAnalysisCmd;
 import com.cyan.datametric.domain.config.BuiltinTimeDimension;
 import com.cyan.datametric.domain.config.Dimension;
 import com.cyan.datametric.domain.config.query.DimensionPageQuery;
 import com.cyan.datametric.domain.config.repository.DimensionRepository;
+import com.cyan.datametric.domain.metric.Metric;
 import com.cyan.datametric.domain.metric.dimension.category.DimensionCategory;
 import com.cyan.datametric.domain.metric.dimension.category.repository.DimensionCategoryRepository;
 import com.cyan.datametric.domain.metric.query.MetricPageQuery;
@@ -37,6 +41,9 @@ import com.cyan.datametric.domain.metric.subject.MetricSubject;
 import com.cyan.datametric.domain.metric.subject.repository.MetricSubjectRepository;
 import com.cyan.datametric.infra.gateway.AuthCheckGateway;
 import com.cyan.datametric.infra.gateway.SqlGateway;
+import com.cyan.datametric.infra.gateway.TableRelationGateway;
+import com.cyan.dataman.client.table.dto.JoinPathsRequestDTO;
+import com.cyan.dataman.client.table.dto.TableRelationDTO;
 import com.cyan.employee.client.dto.EmployeeDTO;
 import com.cyan.employee.login.filter.UserContextHolder;
 import lombok.RequiredArgsConstructor;
@@ -46,12 +53,15 @@ import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.Collections;
 
 /**
  * 指标BI分析服务实现
@@ -75,6 +85,7 @@ public class MetricBiAnalysisServiceImpl implements MetricBiAnalysisService {
     private final MetricBiAnalysisAppConvert metricBiAnalysisAppConvert;
     private final AuthMetricClient authMetricClient;
     private final AuthCheckGateway authCheckGateway;
+    private final TableRelationGateway tableRelationGateway;
 
     @Value("${cyan.datametric.default-catalog:iceberg}")
     private String defaultCatalog;
@@ -184,7 +195,10 @@ public class MetricBiAnalysisServiceImpl implements MetricBiAnalysisService {
         }
 
         List<BiMetricBO> allMetrics = page.getData().stream()
-                .map(m -> metricBiAnalysisAppConvert.toBiMetricBO(m, subjectNameMap.get(m.getSubjectCode())))
+                .map(this::loadMetricExt)
+                .filter(Objects::nonNull)
+                .map(m -> metricBiAnalysisAppConvert.toBiMetricBO(m, subjectNameMap.get(m.getSubjectCode()))
+                        .setTableRef(primaryTableRef(resolveMetricContext(m))))
                 .toList();
 
         // 过滤已下线指标
@@ -341,6 +355,383 @@ public class MetricBiAnalysisServiceImpl implements MetricBiAnalysisService {
                 })
                 .filter(d -> d.getValue() != null)
                 .toList();
+    }
+
+    @Override
+    public MetricAssociationSearchBO searchAssociations(MetricAssociationSearchQuery query) {
+        MetricAssociationSearchQuery safeQuery = query == null ? new MetricAssociationSearchQuery() : query;
+        boolean includeSelected = Boolean.TRUE.equals(safeQuery.getIncludeSelected());
+        Map<String, AssociationRelation> relationCache = new HashMap<>();
+
+        List<MetricContext> selectedMetrics = normalizeCodes(safeQuery.getMetricCodes()).stream()
+                .map(this::resolveMetricContextByCode)
+                .filter(Objects::nonNull)
+                .toList();
+        List<DimensionContext> selectedDimensions = normalizeCodes(safeQuery.getDimCodes()).stream()
+                .map(this::resolveDimensionContextByCode)
+                .filter(Objects::nonNull)
+                .toList();
+        Set<String> selectedMetricCodes = selectedMetrics.stream()
+                .map(MetricContext::metricCode)
+                .collect(java.util.stream.Collectors.toSet());
+        Set<String> selectedDimCodes = selectedDimensions.stream()
+                .map(DimensionContext::dimCode)
+                .collect(java.util.stream.Collectors.toSet());
+
+        List<BiMetricBO> metrics = listMetrics(
+                trimToNull(safeQuery.getMetricName()),
+                trimToNull(safeQuery.getSubjectCode()),
+                trimToNull(safeQuery.getMetricType())).stream()
+                .filter(m -> includeSelected || !selectedMetricCodes.contains(m.getMetricCode()))
+                .filter(m -> {
+                    MetricContext candidate = resolveMetricContextByCode(m.getMetricCode());
+                    if (candidate == null) {
+                        return false;
+                    }
+                    List<MetricContext> nextMetrics = new ArrayList<>(selectedMetrics);
+                    nextMetrics.add(candidate);
+                    return isAssociationSetValid(nextMetrics, selectedDimensions, relationCache);
+                })
+                .toList();
+
+        List<BiMetricBO> allAccessibleMetrics = null;
+        List<BiDimensionBO> dimensions = listDimensions(
+                trimToNull(safeQuery.getDimName()),
+                trimToNull(safeQuery.getCategoryId())).stream()
+                .filter(d -> includeSelected || !selectedDimCodes.contains(d.getDimCode()))
+                .filter(d -> {
+                    DimensionContext candidate = resolveDimensionContextByCode(d.getDimCode());
+                    if (candidate == null) {
+                        return false;
+                    }
+                    List<DimensionContext> nextDimensions = new ArrayList<>(selectedDimensions);
+                    nextDimensions.add(candidate);
+                    if (!selectedMetrics.isEmpty()) {
+                        return isAssociationSetValid(selectedMetrics, nextDimensions, relationCache);
+                    }
+                    if (!selectedDimensions.isEmpty()) {
+                        return hasAnyMetricForDimensions(nextDimensions, relationCache);
+                    }
+                    return true;
+                })
+                .toList();
+
+        return new MetricAssociationSearchBO()
+                .setMetrics(metrics)
+                .setDimensions(dimensions);
+    }
+
+    @Override
+    public MetricAssociationGraphBO associationGraph(String metricCode) {
+        MetricContext centerMetric = resolveMetricContextByCode(metricCode);
+        Assert.notNull(centerMetric, new BusinessException("指标不存在或不可用于关联图谱"));
+
+        MetricAssociationSearchBO searchBO = searchAssociations(new MetricAssociationSearchQuery()
+                .setMetricCodes(List.of(centerMetric.metricCode()))
+                .setIncludeSelected(false));
+        Map<String, AssociationRelation> relationCache = new HashMap<>();
+        Map<String, MetricAssociationGraphBO.Node> nodeMap = new LinkedHashMap<>();
+        List<MetricAssociationGraphBO.Edge> edges = new ArrayList<>();
+
+        MetricAssociationGraphBO.Node center = toGraphMetricNode(centerMetric);
+        nodeMap.put(center.getId(), center);
+
+        for (BiMetricBO metricBO : searchBO.getMetrics()) {
+            MetricContext metric = resolveMetricContextByCode(metricBO.getMetricCode());
+            if (metric == null) {
+                continue;
+            }
+            MetricAssociationGraphBO.Node node = toGraphMetricNode(metric);
+            nodeMap.put(node.getId(), node);
+            edges.add(new MetricAssociationGraphBO.Edge()
+                    .setSource(center.getId())
+                    .setTarget(node.getId())
+                    .setRelationType("SAME_FACT")
+                    .setSourceTable(primaryTableRef(centerMetric))
+                    .setTargetTable(primaryTableRef(metric))
+                    .setDescription("同事实表指标，可直接共同查询"));
+        }
+
+        for (BiDimensionBO dimensionBO : searchBO.getDimensions()) {
+            DimensionContext dimension = resolveDimensionContextByCode(dimensionBO.getDimCode());
+            if (dimension == null) {
+                continue;
+            }
+            MetricAssociationGraphBO.Node node = toGraphDimensionNode(dimension);
+            nodeMap.put(node.getId(), node);
+            AssociationRelation relation = relationBetweenMetricAndDimension(centerMetric, dimension, relationCache);
+            edges.add(new MetricAssociationGraphBO.Edge()
+                    .setSource(center.getId())
+                    .setTarget(node.getId())
+                    .setRelationType(relation.relationType())
+                    .setJoinType(relation.joinType())
+                    .setSourceColumn(relation.sourceColumn())
+                    .setTargetColumn(relation.targetColumn())
+                    .setSourceTable(relation.sourceTable())
+                    .setTargetTable(relation.targetTable())
+                    .setDescription(relation.description()));
+        }
+
+        return new MetricAssociationGraphBO()
+                .setCenter(center)
+                .setNodes(new ArrayList<>(nodeMap.values()))
+                .setEdges(edges);
+    }
+
+    private boolean hasAnyMetricForDimensions(List<DimensionContext> dimensions,
+                                               Map<String, AssociationRelation> relationCache) {
+        return listMetrics(null, null, null).stream()
+                .map(m -> resolveMetricContextByCode(m.getMetricCode()))
+                .filter(Objects::nonNull)
+                .anyMatch(metric -> isAssociationSetValid(List.of(metric), dimensions, relationCache));
+    }
+
+    private boolean isAssociationSetValid(List<MetricContext> metrics,
+                                          List<DimensionContext> dimensions,
+                                          Map<String, AssociationRelation> relationCache) {
+        if (metrics == null || metrics.isEmpty()) {
+            return true;
+        }
+        Set<String> factTables = metrics.stream()
+                .flatMap(m -> m.tableRefs().stream())
+                .collect(java.util.stream.Collectors.toCollection(LinkedHashSet::new));
+        if (factTables.isEmpty()) {
+            return false;
+        }
+        if (dimensions == null || dimensions.isEmpty()) {
+            return factTables.size() <= 1;
+        }
+        for (MetricContext metric : metrics) {
+            for (DimensionContext dimension : dimensions) {
+                AssociationRelation relation = relationBetweenMetricAndDimension(metric, dimension, relationCache);
+                if (!relation.associated()) {
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
+
+    private AssociationRelation relationBetweenMetricAndDimension(MetricContext metric,
+                                                                  DimensionContext dimension,
+                                                                  Map<String, AssociationRelation> relationCache) {
+        if (dimension.builtin()) {
+            return AssociationRelation.associated("BUILTIN_TIME", primaryTableRef(metric), null,
+                    null, null, null, "内置时间维度，可用于所有事实表");
+        }
+
+        if (StringUtils.hasText(dimension.sourceTableRef())) {
+            boolean allMatched = metric.tableRefs().stream().allMatch(dimension.sourceTableRef()::equals);
+            return allMatched
+                    ? AssociationRelation.associated("SOURCE_TABLE", dimension.sourceTableRef(), dimension.sourceTableRef(),
+                    null, dimension.columnName(), null, "事实表本地维度")
+                    : AssociationRelation.notAssociated();
+        }
+
+        if (!StringUtils.hasText(dimension.tableRef())) {
+            return AssociationRelation.associated("LOCAL_EXPRESSION", primaryTableRef(metric), null,
+                    null, dimension.columnName(), null, "事实表本地表达式维度");
+        }
+
+        AssociationRelation firstRelation = null;
+        for (String factTable : metric.tableRefs()) {
+            if (factTable.equals(dimension.tableRef())) {
+                firstRelation = AssociationRelation.associated("SAME_FACT", factTable, dimension.tableRef(),
+                        null, dimension.columnName(), null, "维度字段与指标位于同一事实表");
+                continue;
+            }
+            AssociationRelation relation = queryJoinRelation(factTable, dimension.tableRef(), relationCache);
+            if (!relation.associated()) {
+                return AssociationRelation.notAssociated();
+            }
+            if (firstRelation == null) {
+                firstRelation = relation;
+            }
+        }
+        return firstRelation != null ? firstRelation : AssociationRelation.notAssociated();
+    }
+
+    private AssociationRelation queryJoinRelation(String factTableRef,
+                                                  String dimTableRef,
+                                                  Map<String, AssociationRelation> relationCache) {
+        String cacheKey = factTableRef + "->" + dimTableRef;
+        if (relationCache.containsKey(cacheKey)) {
+            return relationCache.get(cacheKey);
+        }
+        String[] factParts = factTableRef.split("\\.");
+        String[] dimParts = dimTableRef.split("\\.");
+        if (factParts.length != 3 || dimParts.length != 3) {
+            AssociationRelation relation = AssociationRelation.notAssociated();
+            relationCache.put(cacheKey, relation);
+            return relation;
+        }
+        JoinPathsRequestDTO request = new JoinPathsRequestDTO()
+                .setFactTable(new JoinPathsRequestDTO.TableRefDTO(factParts[0], factParts[1], factParts[2]))
+                .setDimensionTables(List.of(new JoinPathsRequestDTO.TableRefDTO(dimParts[0], dimParts[1], dimParts[2])));
+        try {
+            Response<List<TableRelationDTO>> response = tableRelationGateway.findJoinPaths(request);
+            TableRelationDTO join = response == null || response.getData() == null
+                    ? null
+                    : response.getData().stream().findFirst().orElse(null);
+            AssociationRelation relation = join == null
+                    ? AssociationRelation.notAssociated()
+                    : AssociationRelation.associated("JOIN", factTableRef, dimTableRef,
+                    join.getSourceColumn(), join.getTargetColumn(), join.getJoinType(),
+                    StringUtils.hasText(join.getDescription()) ? join.getDescription() : "通过元数据表关系可 JOIN");
+            relationCache.put(cacheKey, relation);
+            return relation;
+        } catch (Exception e) {
+            log.warn("查询指标维度可关联关系失败, factTableRef={}, dimTableRef={}", factTableRef, dimTableRef, e);
+            AssociationRelation relation = AssociationRelation.notAssociated();
+            relationCache.put(cacheKey, relation);
+            return relation;
+        }
+    }
+
+    private MetricContext resolveMetricContextByCode(String metricCode) {
+        if (!StringUtils.hasText(metricCode)) {
+            return null;
+        }
+        return resolveMetricContext(metricRepository.findByMetricCode(metricCode));
+    }
+
+    private MetricContext resolveMetricContext(Metric metric) {
+        if (metric == null || metric.getMetricType() == null) {
+            return null;
+        }
+        Set<String> tableRefs = new LinkedHashSet<>();
+        collectMetricTableRefs(metric, tableRefs, new HashSet<>());
+        if (tableRefs.isEmpty()) {
+            return null;
+        }
+        return new MetricContext(metric.getId(), metric.getMetricCode(), metric.getMetricName(),
+                metric.getMetricType().getCode(), tableRefs);
+    }
+
+    private void collectMetricTableRefs(Metric metric, Set<String> tableRefs, Set<String> visitedMetricIds) {
+        if (metric == null || metric.getMetricType() == null || !StringUtils.hasText(metric.getId())) {
+            return;
+        }
+        if (!visitedMetricIds.add(metric.getId())) {
+            return;
+        }
+        switch (metric.getMetricType()) {
+            case ATOMIC -> {
+                if (metric.getAtomicExt() != null
+                        && StringUtils.hasText(metric.getAtomicExt().getDbName())
+                        && StringUtils.hasText(metric.getAtomicExt().getTblName())) {
+                    tableRefs.add(normalizeTableRef(metric.getAtomicExt().getDbName()
+                            + "." + metric.getAtomicExt().getTblName()));
+                }
+            }
+            case DERIVED -> {
+                if (metric.getDerivedExt() != null && StringUtils.hasText(metric.getDerivedExt().getAtomicMetricId())) {
+                    collectMetricTableRefs(metricRepository.findById(metric.getDerivedExt().getAtomicMetricId()),
+                            tableRefs, visitedMetricIds);
+                }
+            }
+            case COMPOSITE -> {
+                if (metric.getCompositeExt() != null && metric.getCompositeExt().getMetricRefs() != null) {
+                    for (String metricId : metric.getCompositeExt().getMetricRefs()) {
+                        collectMetricTableRefs(metricRepository.findById(metricId), tableRefs, visitedMetricIds);
+                    }
+                }
+            }
+        }
+    }
+
+    private DimensionContext resolveDimensionContextByCode(String dimCode) {
+        if (!StringUtils.hasText(dimCode)) {
+            return null;
+        }
+        BuiltinTimeDimension builtin = BuiltinTimeDimension.of(dimCode);
+        if (builtin != null) {
+            return new DimensionContext(dimCode, builtin.getDimName(), null, "dt", null, null, true);
+        }
+        Dimension dimension = dimensionRepository.findByDimCode(dimCode);
+        if (dimension == null) {
+            return null;
+        }
+        String tableRef = buildDimensionTableRef(dimension.getSchemaName(), dimension.getTableName());
+        String sourceTableRef = StringUtils.hasText(dimension.getSourceTable())
+                ? normalizeTableRef(dimension.getSourceTable())
+                : null;
+        return new DimensionContext(dimension.getDimCode(), dimension.getDimName(), tableRef,
+                dimension.getColumnName(), dimension.getDisplayColumn(), sourceTableRef, false);
+    }
+
+    private Metric loadMetricExt(Metric metric) {
+        if (metric == null || !StringUtils.hasText(metric.getId())) {
+            return metric;
+        }
+        Metric loaded = metricRepository.findById(metric.getId());
+        return loaded == null ? metric : loaded;
+    }
+
+    private String primaryTableRef(MetricContext metric) {
+        if (metric == null || metric.tableRefs().isEmpty()) {
+            return null;
+        }
+        return metric.tableRefs().iterator().next();
+    }
+
+    private MetricAssociationGraphBO.Node toGraphMetricNode(MetricContext metric) {
+        return new MetricAssociationGraphBO.Node()
+                .setId("M:" + metric.metricCode())
+                .setCode(metric.metricCode())
+                .setName(metric.metricName())
+                .setNodeType("METRIC")
+                .setMetricType(metric.metricType())
+                .setTableRef(String.join(",", metric.tableRefs()));
+    }
+
+    private MetricAssociationGraphBO.Node toGraphDimensionNode(DimensionContext dimension) {
+        return new MetricAssociationGraphBO.Node()
+                .setId("D:" + dimension.dimCode())
+                .setCode(dimension.dimCode())
+                .setName(dimension.dimName())
+                .setNodeType("DIMENSION")
+                .setTableRef(StringUtils.hasText(dimension.tableRef()) ? dimension.tableRef() : dimension.sourceTableRef());
+    }
+
+    private List<String> normalizeCodes(List<String> codes) {
+        if (codes == null || codes.isEmpty()) {
+            return List.of();
+        }
+        return codes.stream()
+                .map(this::trimToNull)
+                .filter(Objects::nonNull)
+                .distinct()
+                .toList();
+    }
+
+    private String trimToNull(String value) {
+        return value == null || value.isBlank() ? null : value.trim();
+    }
+
+    private record MetricContext(String id, String metricCode, String metricName,
+                                 String metricType, Set<String> tableRefs) {
+    }
+
+    private record DimensionContext(String dimCode, String dimName, String tableRef,
+                                    String columnName, String displayColumn,
+                                    String sourceTableRef, boolean builtin) {
+    }
+
+    private record AssociationRelation(boolean associated, String relationType, String sourceTable,
+                                       String targetTable, String sourceColumn, String targetColumn,
+                                       String joinType, String description) {
+
+        private static AssociationRelation associated(String relationType, String sourceTable, String targetTable,
+                                                      String sourceColumn, String targetColumn, String joinType,
+                                                      String description) {
+            return new AssociationRelation(true, relationType, sourceTable, targetTable,
+                    sourceColumn, targetColumn, joinType, description);
+        }
+
+        private static AssociationRelation notAssociated() {
+            return new AssociationRelation(false, null, null, null, null, null, null, null);
+        }
     }
 
     private String getCurrentPassport() {

@@ -4,6 +4,9 @@ import com.cyan.datametric.application.bi.bo.BiDimensionBO;
 import com.cyan.datametric.application.bi.bo.BiMetricBO;
 import com.cyan.datametric.application.bi.bo.ChartDataBO;
 import com.cyan.datametric.application.bi.bo.DimensionValueBO;
+import com.cyan.datametric.application.bi.bo.MetricAssociationGraphBO;
+import com.cyan.datametric.application.bi.bo.MetricAssociationSearchBO;
+import com.cyan.datametric.application.bi.query.MetricAssociationSearchQuery;
 import com.cyan.datametric.client.dto.MetricBiAnalysisCmd;
 
 import java.util.List;
@@ -59,4 +62,20 @@ public interface MetricBiAnalysisService {
      * @return 维度值列表（value=物理字段值, label=显示字段值）
      */
     List<DimensionValueBO> listDimensionValues(String dimCode);
+
+    /**
+     * 搜索当前已选指标维度可继续关联的候选对象
+     *
+     * @param query 可关联搜索查询
+     * @return 可关联指标和维度
+     */
+    MetricAssociationSearchBO searchAssociations(MetricAssociationSearchQuery query);
+
+    /**
+     * 查询单个指标的可关联图谱
+     *
+     * @param metricCode 指标编码
+     * @return 指标可关联图谱
+     */
+    MetricAssociationGraphBO associationGraph(String metricCode);
 }
