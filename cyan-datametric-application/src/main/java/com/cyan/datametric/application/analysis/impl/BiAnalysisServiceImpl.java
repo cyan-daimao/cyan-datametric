@@ -39,6 +39,8 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class BiAnalysisServiceImpl implements BiAnalysisService {
 
+    private static final String PHYSICAL_ENTITY_ID_DIMENSION = "__PHYSICAL_ENTITY_ID__";
+
     private final MetricRepository metricRepository;
     private final DimensionRepository dimensionRepository;
     private final SqlGateway sqlGateway;
@@ -538,6 +540,16 @@ public class BiAnalysisServiceImpl implements BiAnalysisService {
 
         Dimension dim = dimensionRepository.findByDimCode(dimCode);
         if (dim == null) {
+            if (PHYSICAL_ENTITY_ID_DIMENSION.equals(ref.getDimName())) {
+                validatePhysicalColumn(dimCode);
+                DimensionInfo info = new DimensionInfo();
+                info.dimCode = dimCode;
+                info.columnName = "`" + dimCode + "`";
+                info.alias = StringUtils.hasText(ref.getAlias()) ? ref.getAlias() : dimCode;
+                info.tableName = null;
+                info.displayColumn = null;
+                return info;
+            }
             throw new BusinessException("维度 '" + dimCode + "' 不存在");
         }
         String columnExpr = resolveDimensionExpression(dim);
@@ -583,6 +595,15 @@ public class BiAnalysisServiceImpl implements BiAnalysisService {
      */
     private String escapeSql(String value) {
         return value == null ? "" : value.replace("'", "''");
+    }
+
+    /**
+     * 校验物理字段名
+     */
+    private void validatePhysicalColumn(String columnName) {
+        if (!columnName.matches("[A-Za-z_][A-Za-z0-9_]*")) {
+            throw new BusinessException("物理字段名格式不正确: " + columnName);
+        }
     }
 
     // ==================== 过滤条件解析 ====================
@@ -757,7 +778,7 @@ public class BiAnalysisServiceImpl implements BiAnalysisService {
                                       List<DimensionInfo> dimensionInfos,
                                       MetricBiAnalysisCmd cmd) {
         for (DimensionInfo dim : dimensionInfos) {
-            if (!StringUtils.hasText(dim.tableName)) {
+            if (!StringUtils.hasText(dim.tableName) && !isSimpleQuotedColumn(dim.columnName)) {
                 throw new BusinessException("多事实表关联分析要求所有维度必须配置关联维度表");
             }
         }
@@ -871,6 +892,29 @@ public class BiAnalysisServiceImpl implements BiAnalysisService {
         }
     }
 
+    /**
+     * 是否为简单反引号字段
+     */
+    private boolean isSimpleQuotedColumn(String columnName) {
+        return StringUtils.hasText(simpleColumnName(columnName));
+    }
+
+    /**
+     * 解析简单反引号字段名
+     */
+    private String simpleColumnName(String columnName) {
+        if (!StringUtils.hasText(columnName)) {
+            return null;
+        }
+        if (columnName.startsWith("`") && columnName.endsWith("`") && columnName.length() > 2) {
+            return columnName.substring(1, columnName.length() - 1);
+        }
+        if (columnName.matches("[A-Za-z_][A-Za-z0-9_]*")) {
+            return columnName;
+        }
+        return null;
+    }
+
     private String buildFactCteSql(FactGroup group, List<DimensionInfo> dimensionInfos,
                                     MetricBiAnalysisCmd cmd) {
         StringBuilder cte = new StringBuilder();
@@ -881,11 +925,13 @@ public class BiAnalysisServiceImpl implements BiAnalysisService {
 
         for (int i = 0; i < dimensionInfos.size(); i++) {
             DimensionInfo dim = dimensionInfos.get(i);
+            String sourceColumn;
             if (!StringUtils.hasText(dim.tableName)) {
-                continue;
+                sourceColumn = simpleColumnName(dim.columnName);
+            } else {
+                sourceColumn = group.dimKeyMap.get(dim.tableName);
             }
-            String sourceColumn = group.dimKeyMap.get(dim.tableName);
-            if (!StringUtils.hasText(sourceColumn) && group.tableRef.equals(dim.tableName)) {
+            if (StringUtils.hasText(dim.tableName) && !StringUtils.hasText(sourceColumn) && group.tableRef.equals(dim.tableName)) {
                 sourceColumn = dim.columnName.replace("`", "");
             }
             if (!StringUtils.hasText(sourceColumn)) {
@@ -935,6 +981,9 @@ public class BiAnalysisServiceImpl implements BiAnalysisService {
     }
 
     private boolean hasDimKey(FactGroup group, int dimIndex, DimensionInfo dim) {
+        if (!StringUtils.hasText(dim.tableName)) {
+            return isSimpleQuotedColumn(dim.columnName);
+        }
         if (group.tableRef.equals(dim.tableName)) {
             return StringUtils.hasText(dim.columnName);
         }
@@ -1028,8 +1077,7 @@ public class BiAnalysisServiceImpl implements BiAnalysisService {
                 }
                 selectItems.add(dimAlias + "." + col + " AS `" + dim.alias + "`");
             } else {
-                // 内置维度（如时间维度）无需表别名前缀
-                selectItems.add(col + " AS `" + dim.alias + "`");
+                selectItems.add("j.`" + dim.alias + "` AS `" + dim.alias + "`");
             }
         }
 

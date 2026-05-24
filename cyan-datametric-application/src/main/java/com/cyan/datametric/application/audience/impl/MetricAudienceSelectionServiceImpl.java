@@ -10,8 +10,11 @@ import com.cyan.datametric.client.audience.dto.MetricAudienceEstimateDTO;
 import com.cyan.datametric.client.audience.dto.MetricAudienceSelectionSqlDTO;
 import com.cyan.datametric.client.audience.request.MetricAudienceSelectionCmd;
 import com.cyan.datametric.client.dto.MetricBiAnalysisCmd;
+import com.cyan.datametric.domain.config.Dimension;
+import com.cyan.datametric.domain.config.repository.DimensionRepository;
 import com.cyan.datametric.infra.gateway.SqlGateway;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.util.DigestUtils;
 import org.springframework.util.StringUtils;
@@ -35,25 +38,31 @@ import java.util.stream.Collectors;
 public class MetricAudienceSelectionServiceImpl implements MetricAudienceSelectionService {
 
     private static final String DEFAULT_ENTITY_TYPE = "USER";
-    private static final String DEFAULT_ENTITY_ID_DIM_CODE = "DIM_USER_ID";
-    private static final String ENTITY_ID_ALIAS = "user_id";
+    private static final String DEFAULT_ENTITY_ID_COLUMN = "user_id";
+    private static final String ENTITY_ID_ALIAS = "entity_id";
+    private static final String PHYSICAL_ENTITY_ID_DIMENSION = "__PHYSICAL_ENTITY_ID__";
 
     private final BiAnalysisService biAnalysisService;
+    private final DimensionRepository dimensionRepository;
     private final SqlGateway sqlGateway;
+
+    @Value("${cyan.datametric.default-catalog:iceberg}")
+    private String defaultCatalog;
 
     @Override
     public MetricAudienceSelectionSqlDTO compile(MetricAudienceSelectionCmd cmd, String executor) {
         validate(cmd);
-        MetricBiAnalysisCmd baseCmd = buildBaseCmd(cmd);
-        String baseSql = stripTailLimit(biAnalysisService.previewSql(baseCmd));
+        boolean metricSelection = hasMetrics(cmd);
+        String baseSql = metricSelection ? buildMetricSelectionSql(cmd) : buildDimensionSelectionSql(cmd);
+        String sourceEntityColumn = ENTITY_ID_ALIAS;
         String metricFilterSql = buildMetricOuterFilter(cmd);
         String wrappedSql = "SELECT * FROM (" + baseSql + ") audience_base";
         if (StringUtils.hasText(metricFilterSql)) {
             wrappedSql += " WHERE " + metricFilterSql;
         }
 
-        String memberSql = "SELECT DISTINCT `" + ENTITY_ID_ALIAS + "` AS `" + ENTITY_ID_ALIAS + "` FROM (" + wrappedSql + ") audience_members";
-        String countSql = "SELECT COUNT(DISTINCT `" + ENTITY_ID_ALIAS + "`) AS `total` FROM (" + wrappedSql + ") audience_count";
+        String memberSql = "SELECT DISTINCT `" + escapeIdentifier(sourceEntityColumn) + "` AS `" + ENTITY_ID_ALIAS + "` FROM (" + wrappedSql + ") audience_members";
+        String countSql = "SELECT COUNT(DISTINCT `" + escapeIdentifier(sourceEntityColumn) + "`) AS `total` FROM (" + wrappedSql + ") audience_count";
         String queryHash = DigestUtils.md5DigestAsHex((memberSql + "|" + executor).getBytes(StandardCharsets.UTF_8));
         return new MetricAudienceSelectionSqlDTO()
                 .setQueryHash(queryHash)
@@ -90,13 +99,102 @@ public class MetricAudienceSelectionServiceImpl implements MetricAudienceSelecti
         if (cmd == null) {
             throw new BusinessException("圈选条件不能为空");
         }
-        String entityType = StringUtils.hasText(cmd.getEntityType()) ? cmd.getEntityType() : DEFAULT_ENTITY_TYPE;
-        if (!DEFAULT_ENTITY_TYPE.equalsIgnoreCase(entityType)) {
-            throw new BusinessException("首版仅支持 USER 圈选");
+        if (!StringUtils.hasText(cmd.getEntityType())) {
+            cmd.setEntityType(DEFAULT_ENTITY_TYPE);
         }
-        if (cmd.getMetrics() == null || cmd.getMetrics().isEmpty()) {
-            throw new BusinessException("请至少选择一个指标");
+        if (!StringUtils.hasText(cmd.getEntityIdColumn())) {
+            cmd.setEntityIdColumn(DEFAULT_ENTITY_ID_COLUMN);
         }
+        validateIdentifier(cmd.getEntityIdColumn(), "实体ID字段");
+        if (!hasMetrics(cmd)) {
+            if (cmd.getFilters() == null || cmd.getFilters().stream().noneMatch(filter -> StringUtils.hasText(filter.getDimCode()))) {
+                throw new BusinessException("无指标圈选至少需要一个维度过滤条件");
+            }
+            boolean hasMetricFilter = cmd.getFilters().stream().anyMatch(filter -> StringUtils.hasText(filter.getMetricCode()));
+            if (hasMetricFilter) {
+                throw new BusinessException("无指标圈选不支持指标过滤");
+            }
+        }
+    }
+
+    /**
+     * 是否选择指标
+     */
+    private boolean hasMetrics(MetricAudienceSelectionCmd cmd) {
+        return cmd.getMetrics() != null && !cmd.getMetrics().isEmpty();
+    }
+
+    /**
+     * 构建指标聚合圈选SQL
+     */
+    private String buildMetricSelectionSql(MetricAudienceSelectionCmd cmd) {
+        MetricBiAnalysisCmd baseCmd = buildBaseCmd(cmd);
+        return stripTailLimit(biAnalysisService.previewSql(baseCmd));
+    }
+
+    /**
+     * 构建无指标维度圈选SQL
+     */
+    private String buildDimensionSelectionSql(MetricAudienceSelectionCmd cmd) {
+        Map<String, Dimension> dimensionMap = resolveDimensionMap(cmd);
+        Dimension tableDimension = dimensionMap.values().stream()
+                .filter(dimension -> StringUtils.hasText(dimension.getTableName()))
+                .findFirst()
+                .orElseThrow(() -> new BusinessException("无指标圈选至少需要一个关联维表的维度"));
+        String tableRef = buildDimensionTableRef(tableDimension.getSchemaName(), tableDimension.getTableName());
+        List<String> conditions = new ArrayList<>();
+        for (MetricBiAnalysisCmd.FilterRef filter : cmd.getFilters()) {
+            Dimension dimension = dimensionMap.get(filter.getDimCode());
+            if (dimension == null) {
+                throw new BusinessException("过滤维度不存在: " + filter.getDimCode());
+            }
+            String currentTableRef = buildDimensionTableRef(dimension.getSchemaName(), dimension.getTableName());
+            if (!Objects.equals(tableRef, currentTableRef)) {
+                throw new BusinessException("无指标圈选暂不支持跨维表过滤");
+            }
+            String condition = buildFilterCondition(resolveDimensionExpression(dimension), filter.getOperator(), filter.getValues());
+            if (StringUtils.hasText(condition)) {
+                conditions.add(condition);
+            }
+        }
+        StringBuilder sql = new StringBuilder();
+        sql.append("SELECT DISTINCT `")
+                .append(escapeIdentifier(cmd.getEntityIdColumn()))
+                .append("` AS `")
+                .append(ENTITY_ID_ALIAS)
+                .append("` FROM ")
+                .append(tableRef);
+        if (!conditions.isEmpty()) {
+            sql.append(" WHERE ").append(String.join(" AND ", conditions));
+        }
+        return sql.toString();
+    }
+
+    /**
+     * 解析圈选维度
+     */
+    private Map<String, Dimension> resolveDimensionMap(MetricAudienceSelectionCmd cmd) {
+        Map<String, Dimension> dimensionMap = new LinkedHashMap<>();
+        if (cmd.getFilters() != null) {
+            for (MetricBiAnalysisCmd.FilterRef filter : cmd.getFilters()) {
+                putDimension(dimensionMap, filter.getDimCode());
+            }
+        }
+        return dimensionMap;
+    }
+
+    /**
+     * 添加维度
+     */
+    private void putDimension(Map<String, Dimension> dimensionMap, String dimCode) {
+        if (!StringUtils.hasText(dimCode) || dimensionMap.containsKey(dimCode)) {
+            return;
+        }
+        Dimension dimension = dimensionRepository.findByDimCode(dimCode);
+        if (dimension == null) {
+            throw new BusinessException("维度不存在: " + dimCode);
+        }
+        dimensionMap.put(dimCode, dimension);
     }
 
     /**
@@ -119,15 +217,15 @@ public class MetricAudienceSelectionServiceImpl implements MetricAudienceSelecti
      * 构建包含实体ID维度的维度列表
      */
     private List<MetricBiAnalysisCmd.DimensionRef> buildDimensions(MetricAudienceSelectionCmd cmd) {
-        String entityIdDimCode = StringUtils.hasText(cmd.getEntityIdDimCode())
-                ? cmd.getEntityIdDimCode()
-                : DEFAULT_ENTITY_ID_DIM_CODE;
+        String entityIdColumn = StringUtils.hasText(cmd.getEntityIdColumn())
+                ? cmd.getEntityIdColumn()
+                : DEFAULT_ENTITY_ID_COLUMN;
         Map<String, MetricBiAnalysisCmd.DimensionRef> dimensionMap = new LinkedHashMap<>();
         MetricBiAnalysisCmd.DimensionRef entityIdRef = new MetricBiAnalysisCmd.DimensionRef()
-                .setDimCode(entityIdDimCode)
+                .setDimCode(entityIdColumn)
                 .setAlias(ENTITY_ID_ALIAS)
-                .setDimName(ENTITY_ID_ALIAS);
-        dimensionMap.put(entityIdDimCode, entityIdRef);
+                .setDimName(PHYSICAL_ENTITY_ID_DIMENSION);
+        dimensionMap.put(entityIdColumn, entityIdRef);
         if (cmd.getDimensions() != null) {
             for (MetricBiAnalysisCmd.DimensionRef ref : cmd.getDimensions()) {
                 if (ref != null && StringUtils.hasText(ref.getDimCode()) && !dimensionMap.containsKey(ref.getDimCode())) {
@@ -143,6 +241,9 @@ public class MetricAudienceSelectionServiceImpl implements MetricAudienceSelecti
      */
     private String buildMetricOuterFilter(MetricAudienceSelectionCmd cmd) {
         if (cmd.getFilters() == null || cmd.getFilters().isEmpty()) {
+            return null;
+        }
+        if (!hasMetrics(cmd)) {
             return null;
         }
         Map<String, String> metricAliasMap = cmd.getMetrics().stream()
@@ -218,6 +319,58 @@ public class MetricAudienceSelectionServiceImpl implements MetricAudienceSelecti
     }
 
     /**
+     * 构建维表引用
+     */
+    private String buildDimensionTableRef(String schema, String tableName) {
+        if (!StringUtils.hasText(tableName)) {
+            throw new BusinessException("维度未配置关联维表");
+        }
+        if (tableName.contains(".")) {
+            return normalizeTableRef(tableName);
+        }
+        if (StringUtils.hasText(schema)) {
+            return normalizeTableRef(schema + "." + tableName);
+        }
+        return normalizeTableRef(tableName);
+    }
+
+    /**
+     * 标准化表引用
+     */
+    private String normalizeTableRef(String tableRef) {
+        String[] parts = tableRef.split("\\.");
+        if (parts.length == 2) {
+            return defaultCatalog + "." + tableRef;
+        }
+        if (parts.length == 1) {
+            throw new BusinessException("表引用格式错误，期望 schema.table 或 catalog.schema.table，实际: " + tableRef);
+        }
+        return tableRef;
+    }
+
+    /**
+     * 解析维度表达式
+     */
+    private String resolveDimensionExpression(Dimension dimension) {
+        String sourceType = StringUtils.hasText(dimension.getSourceType()) ? dimension.getSourceType() : "COLUMN";
+        return switch (sourceType) {
+            case "JSON_PATH" -> "JSON_VALUE(properties, '" + escapeValue(resolveJsonPath(dimension)) + "')";
+            case "EXPRESSION" -> dimension.getSourceExpr();
+            default -> "`" + escapeIdentifier(dimension.getColumnName()) + "`";
+        };
+    }
+
+    /**
+     * 解析 JSON Path
+     */
+    private String resolveJsonPath(Dimension dimension) {
+        if (StringUtils.hasText(dimension.getSourceExpr())) {
+            return dimension.getSourceExpr();
+        }
+        return "$.properties." + dimension.getColumnName();
+    }
+
+    /**
      * 转换 Long
      */
     private Long toLong(Object value) {
@@ -242,5 +395,14 @@ public class MetricAudienceSelectionServiceImpl implements MetricAudienceSelecti
      */
     private String escapeIdentifier(String value) {
         return value == null ? "" : value.replace("`", "``");
+    }
+
+    /**
+     * 校验物理字段名
+     */
+    private void validateIdentifier(String value, String name) {
+        if (!value.matches("[A-Za-z_][A-Za-z0-9_]*")) {
+            throw new BusinessException(name + "只能是物理字段名");
+        }
     }
 }
