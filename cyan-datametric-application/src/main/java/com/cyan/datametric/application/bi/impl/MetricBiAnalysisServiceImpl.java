@@ -40,9 +40,11 @@ import com.cyan.datametric.domain.metric.repository.MetricRepository;
 import com.cyan.datametric.domain.metric.subject.MetricSubject;
 import com.cyan.datametric.domain.metric.subject.repository.MetricSubjectRepository;
 import com.cyan.datametric.infra.gateway.AuthCheckGateway;
+import com.cyan.datametric.infra.gateway.MetadataTableGateway;
 import com.cyan.datametric.infra.gateway.SqlGateway;
 import com.cyan.datametric.infra.gateway.TableRelationGateway;
 import com.cyan.dataman.client.table.dto.JoinPathsRequestDTO;
+import com.cyan.dataman.client.table.dto.MetadataColumnDTO;
 import com.cyan.dataman.client.table.dto.TableRelationDTO;
 import com.cyan.employee.client.dto.EmployeeDTO;
 import com.cyan.employee.login.filter.UserContextHolder;
@@ -61,7 +63,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
-import java.util.Collections;
 
 /**
  * 指标BI分析服务实现
@@ -86,6 +87,7 @@ public class MetricBiAnalysisServiceImpl implements MetricBiAnalysisService {
     private final AuthMetricClient authMetricClient;
     private final AuthCheckGateway authCheckGateway;
     private final TableRelationGateway tableRelationGateway;
+    private final MetadataTableGateway metadataTableGateway;
 
     @Value("${cyan.datametric.default-catalog:iceberg}")
     private String defaultCatalog;
@@ -147,7 +149,7 @@ public class MetricBiAnalysisServiceImpl implements MetricBiAnalysisService {
 
         if (result.getData() != null && !result.getData().isEmpty()) {
             rows = result.getData();
-            columns = new ArrayList<>(result.getData().get(0).keySet());
+            columns = new ArrayList<>(result.getData().getFirst().keySet());
         } else {
             columns = new ArrayList<>();
             rows = new ArrayList<>();
@@ -394,7 +396,6 @@ public class MetricBiAnalysisServiceImpl implements MetricBiAnalysisService {
                 })
                 .toList();
 
-        List<BiMetricBO> allAccessibleMetrics = null;
         List<BiDimensionBO> dimensions = listDimensions(
                 trimToNull(safeQuery.getDimName()),
                 trimToNull(safeQuery.getCategoryId())).stream()
@@ -432,6 +433,7 @@ public class MetricBiAnalysisServiceImpl implements MetricBiAnalysisService {
         Map<String, AssociationRelation> relationCache = new HashMap<>();
         Map<String, MetricAssociationGraphBO.Node> nodeMap = new LinkedHashMap<>();
         List<MetricAssociationGraphBO.Edge> edges = new ArrayList<>();
+        Set<String> edgeKeys = new HashSet<>();
 
         MetricAssociationGraphBO.Node center = toGraphMetricNode(centerMetric);
         nodeMap.put(center.getId(), center);
@@ -443,7 +445,7 @@ public class MetricBiAnalysisServiceImpl implements MetricBiAnalysisService {
             }
             MetricAssociationGraphBO.Node node = toGraphMetricNode(metric);
             nodeMap.put(node.getId(), node);
-            edges.add(new MetricAssociationGraphBO.Edge()
+            addGraphEdge(edges, edgeKeys, new MetricAssociationGraphBO.Edge()
                     .setSource(center.getId())
                     .setTarget(node.getId())
                     .setRelationType("SAME_FACT")
@@ -460,7 +462,7 @@ public class MetricBiAnalysisServiceImpl implements MetricBiAnalysisService {
             MetricAssociationGraphBO.Node node = toGraphDimensionNode(dimension);
             nodeMap.put(node.getId(), node);
             AssociationRelation relation = relationBetweenMetricAndDimension(centerMetric, dimension, relationCache);
-            edges.add(new MetricAssociationGraphBO.Edge()
+            addGraphEdge(edges, edgeKeys, new MetricAssociationGraphBO.Edge()
                     .setSource(center.getId())
                     .setTarget(node.getId())
                     .setRelationType(relation.relationType())
@@ -470,12 +472,68 @@ public class MetricBiAnalysisServiceImpl implements MetricBiAnalysisService {
                     .setSourceTable(relation.sourceTable())
                     .setTargetTable(relation.targetTable())
                     .setDescription(relation.description()));
+            appendDimensionAssociatedMetrics(centerMetric, dimension, node, nodeMap, edges, edgeKeys, relationCache);
         }
 
         return new MetricAssociationGraphBO()
                 .setCenter(center)
                 .setNodes(new ArrayList<>(nodeMap.values()))
                 .setEdges(edges);
+    }
+
+    /**
+     * 追加维度一跳可关联的其他指标节点和边。
+     */
+    private void appendDimensionAssociatedMetrics(MetricContext centerMetric,
+                                                  DimensionContext dimension,
+                                                  MetricAssociationGraphBO.Node dimensionNode,
+                                                  Map<String, MetricAssociationGraphBO.Node> nodeMap,
+                                                  List<MetricAssociationGraphBO.Edge> edges,
+                                                  Set<String> edgeKeys,
+                                                  Map<String, AssociationRelation> relationCache) {
+        MetricAssociationSearchBO dimensionSearchBO = searchAssociations(new MetricAssociationSearchQuery()
+                .setDimCodes(List.of(dimension.dimCode()))
+                .setIncludeSelected(false));
+        if (dimensionSearchBO.getMetrics() == null || dimensionSearchBO.getMetrics().isEmpty()) {
+            return;
+        }
+        for (BiMetricBO metricBO : dimensionSearchBO.getMetrics()) {
+            if (centerMetric.metricCode().equals(metricBO.getMetricCode())) {
+                continue;
+            }
+            MetricContext metric = resolveMetricContextByCode(metricBO.getMetricCode());
+            if (metric == null) {
+                continue;
+            }
+            AssociationRelation relation = relationBetweenMetricAndDimension(metric, dimension, relationCache);
+            if (!relation.associated()) {
+                continue;
+            }
+            MetricAssociationGraphBO.Node metricNode = toGraphMetricNode(metric);
+            nodeMap.putIfAbsent(metricNode.getId(), metricNode);
+            addGraphEdge(edges, edgeKeys, new MetricAssociationGraphBO.Edge()
+                    .setSource(dimensionNode.getId())
+                    .setTarget(metricNode.getId())
+                    .setRelationType("DIMENSION_ASSOCIATED_METRIC")
+                    .setJoinType(StringUtils.hasText(relation.joinType()) ? relation.joinType() : relation.relationType())
+                    .setSourceColumn(relation.targetColumn())
+                    .setTargetColumn(relation.sourceColumn())
+                    .setSourceTable(relation.targetTable())
+                    .setTargetTable(relation.sourceTable())
+                    .setDescription("该维度可关联指标：" + metric.metricName() + "；关系来源：" + relation.description()));
+        }
+    }
+
+    /**
+     * 添加图谱边并按来源、目标、关系类型去重。
+     */
+    private void addGraphEdge(List<MetricAssociationGraphBO.Edge> edges,
+                              Set<String> edgeKeys,
+                              MetricAssociationGraphBO.Edge edge) {
+        String key = edge.getSource() + "->" + edge.getTarget() + ":" + edge.getRelationType();
+        if (edgeKeys.add(key)) {
+            edges.add(edge);
+        }
     }
 
     private boolean hasAnyMetricForDimensions(List<DimensionContext> dimensions,
@@ -516,8 +574,7 @@ public class MetricBiAnalysisServiceImpl implements MetricBiAnalysisService {
                                                                   DimensionContext dimension,
                                                                   Map<String, AssociationRelation> relationCache) {
         if (dimension.builtin()) {
-            return AssociationRelation.associated("BUILTIN_TIME", primaryTableRef(metric), null,
-                    null, null, null, "内置时间维度，可用于所有事实表");
+            return builtinTimeRelation(metric, dimension, relationCache);
         }
 
         if (StringUtils.hasText(dimension.sourceTableRef())) {
@@ -549,6 +606,62 @@ public class MetricBiAnalysisServiceImpl implements MetricBiAnalysisService {
             }
         }
         return firstRelation != null ? firstRelation : AssociationRelation.notAssociated();
+    }
+
+    /**
+     * 判定内置时间维度是否可用于指标事实表。
+     */
+    private AssociationRelation builtinTimeRelation(MetricContext metric,
+                                                    DimensionContext dimension,
+                                                    Map<String, AssociationRelation> relationCache) {
+        boolean allTablesHaveDt = metric.tableRefs().stream()
+                .allMatch(tableRef -> factTableContainsColumn(tableRef, dimension.columnName(), relationCache));
+        if (!allTablesHaveDt) {
+            return AssociationRelation.notAssociated();
+        }
+        return AssociationRelation.associated("BUILTIN_TIME", primaryTableRef(metric), null,
+                dimension.columnName(), null, null,
+                "事实表存在 " + dimension.columnName() + " 字段，可使用内置时间维度");
+    }
+
+    /**
+     * 判断事实表是否包含指定字段。
+     */
+    private boolean factTableContainsColumn(String tableRef,
+                                            String columnName,
+                                            Map<String, AssociationRelation> relationCache) {
+        if (!StringUtils.hasText(tableRef) || !StringUtils.hasText(columnName)) {
+            return false;
+        }
+        String cacheKey = "COLUMN_EXISTS:" + tableRef + ":" + columnName;
+        if (relationCache.containsKey(cacheKey)) {
+            return relationCache.get(cacheKey).associated();
+        }
+        List<MetadataColumnDTO> columns = listMetadataColumns(tableRef);
+        boolean exists = columns.stream()
+                .map(MetadataColumnDTO::getCol)
+                .filter(StringUtils::hasText)
+                .anyMatch(columnName::equalsIgnoreCase);
+        AssociationRelation relation = exists
+                ? AssociationRelation.associated("COLUMN_EXISTS", tableRef, null,
+                columnName, null, null, "元数据表字段存在")
+                : AssociationRelation.notAssociated();
+        relationCache.put(cacheKey, relation);
+        return exists;
+    }
+
+    /**
+     * 根据表引用查询元数据字段列表。
+     */
+    private List<MetadataColumnDTO> listMetadataColumns(String tableRef) {
+        String[] parts = tableRef.split("\\.");
+        if (parts.length == 3) {
+            return metadataTableGateway.listColumns(parts[0], parts[1], parts[2]);
+        }
+        if (parts.length == 2) {
+            return metadataTableGateway.listColumns(defaultCatalog, parts[0], parts[1]);
+        }
+        return metadataTableGateway.listColumns(null, null, tableRef);
     }
 
     private AssociationRelation queryJoinRelation(String factTableRef,
