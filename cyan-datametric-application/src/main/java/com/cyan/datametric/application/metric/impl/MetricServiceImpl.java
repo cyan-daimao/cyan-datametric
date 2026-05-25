@@ -8,6 +8,7 @@ import com.cyan.datametric.application.metric.MetricService;
 import com.cyan.datametric.application.metric.bo.*;
 import com.cyan.datametric.application.metric.cmd.*;
 import com.cyan.datametric.application.metric.convert.MetricAppConvert;
+import com.cyan.datametric.application.metric.lineage.MetricFieldLineageSyncService;
 import com.cyan.datametric.domain.config.Modifier;
 import com.cyan.datametric.domain.config.TimePeriod;
 import com.cyan.datametric.domain.config.repository.ModifierRepository;
@@ -54,6 +55,7 @@ public class MetricServiceImpl implements MetricService {
     private final MetricAppConvert metricAppConvert;
     private final MetricBOAssembler metricBOAssembler;
     private final AuthCheckGateway authCheckGateway;
+    private final MetricFieldLineageSyncService metricFieldLineageSyncService;
 
     @Value("${datametric.default-datasource:cyan_iceberg}")
     private String defaultDatasource;
@@ -94,6 +96,7 @@ public class MetricServiceImpl implements MetricService {
         }
         metric.setMetricType(MetricType.ATOMIC);
         metric = metric.save(metricRepository);
+        syncMetricFieldLineage(metric);
         return metricBOAssembler.assembleBasic(metric);
     }
 
@@ -132,6 +135,7 @@ public class MetricServiceImpl implements MetricService {
             metric.setSecurityLevel(existing.getSecurityLevel());
         }
         metric = metric.update(metricRepository);
+        syncMetricFieldLineage(metric);
         return metricBOAssembler.assembleBasic(metric);
     }
 
@@ -146,6 +150,7 @@ public class MetricServiceImpl implements MetricService {
         metric.setMetricType(MetricType.DERIVED);
         metric = metric.save(metricRepository);
         buildLineage(metric);
+        syncMetricFieldLineage(metric);
         return metricBOAssembler.assembleBasic(metric);
     }
 
@@ -173,6 +178,7 @@ public class MetricServiceImpl implements MetricService {
         metric = metric.update(metricRepository);
         lineageRepository.deleteByMetricId(id);
         buildLineage(metric);
+        syncMetricFieldLineage(metric);
         return metricBOAssembler.assembleBasic(metric);
     }
 
@@ -187,6 +193,7 @@ public class MetricServiceImpl implements MetricService {
         metric.setMetricType(MetricType.COMPOSITE);
         metric = metric.save(metricRepository);
         buildLineage(metric);
+        syncMetricFieldLineage(metric);
         return metricBOAssembler.assembleBasic(metric);
     }
 
@@ -214,6 +221,7 @@ public class MetricServiceImpl implements MetricService {
         metric = metric.update(metricRepository);
         lineageRepository.deleteByMetricId(id);
         buildLineage(metric);
+        syncMetricFieldLineage(metric);
         return metricBOAssembler.assembleBasic(metric);
     }
 
@@ -226,6 +234,7 @@ public class MetricServiceImpl implements MetricService {
         Assert.isTrue(downstream.isEmpty(), new BusinessException("该指标被下游指标引用，不可删除"));
         metric.delete(metricRepository);
         lineageRepository.deleteByMetricId(id);
+        metricFieldLineageSyncService.clear(id);
     }
 
     @Override
@@ -241,6 +250,7 @@ public class MetricServiceImpl implements MetricService {
         } else {
             throw new BusinessException("不支持的状态变更");
         }
+        syncMetricFieldLineage(metric);
         return metricBOAssembler.assembleBasic(metric);
     }
 
@@ -380,6 +390,7 @@ public class MetricServiceImpl implements MetricService {
         // 4. 重建血缘
         lineageRepository.deleteByMetricId(metricId);
         buildLineage(history);
+        syncMetricFieldLineage(metricRepository.findById(metricId));
 
         return metricBOAssembler.assembleBasic(metricRepository.findById(metricId));
     }
@@ -388,6 +399,35 @@ public class MetricServiceImpl implements MetricService {
 
 
     // ==================== 密级权限 ====================
+
+    /**
+     * 同步字段级指标血缘
+     */
+    private void syncMetricFieldLineage(Metric metric) {
+        if (metric == null) {
+            return;
+        }
+        try {
+            Metric atomicMetric = null;
+            List<Metric> refMetrics = List.of();
+            if (metric.getMetricType() == MetricType.DERIVED
+                    && metric.getDerivedExt() != null
+                    && metric.getDerivedExt().getAtomicMetricId() != null) {
+                atomicMetric = metricRepository.findById(metric.getDerivedExt().getAtomicMetricId());
+            }
+            if (metric.getMetricType() == MetricType.COMPOSITE
+                    && metric.getCompositeExt() != null
+                    && metric.getCompositeExt().getMetricRefs() != null) {
+                refMetrics = metric.getCompositeExt().getMetricRefs().stream()
+                        .map(metricRepository::findById)
+                        .filter(Objects::nonNull)
+                        .toList();
+            }
+            metricFieldLineageSyncService.sync(metric, atomicMetric, refMetrics);
+        } catch (Exception e) {
+            log.warn("同步指标字段血缘失败, metricId={}", metric.getId(), e);
+        }
+    }
 
     /**
      * 获取用户最高可访问密级，降级为 L1
