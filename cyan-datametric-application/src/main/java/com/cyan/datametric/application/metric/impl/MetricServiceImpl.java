@@ -407,26 +407,22 @@ public class MetricServiceImpl implements MetricService {
         if (metric == null) {
             return;
         }
-        try {
-            Metric atomicMetric = null;
-            List<Metric> refMetrics = List.of();
-            if (metric.getMetricType() == MetricType.DERIVED
-                    && metric.getDerivedExt() != null
-                    && metric.getDerivedExt().getAtomicMetricId() != null) {
-                atomicMetric = metricRepository.findById(metric.getDerivedExt().getAtomicMetricId());
-            }
-            if (metric.getMetricType() == MetricType.COMPOSITE
-                    && metric.getCompositeExt() != null
-                    && metric.getCompositeExt().getMetricRefs() != null) {
-                refMetrics = metric.getCompositeExt().getMetricRefs().stream()
-                        .map(metricRepository::findById)
-                        .filter(Objects::nonNull)
-                        .toList();
-            }
-            metricFieldLineageSyncService.sync(metric, atomicMetric, refMetrics);
-        } catch (Exception e) {
-            log.warn("同步指标字段血缘失败, metricId={}", metric.getId(), e);
+        Metric atomicMetric = null;
+        List<Metric> refMetrics = List.of();
+        if (metric.getMetricType() == MetricType.DERIVED
+                && metric.getDerivedExt() != null
+                && metric.getDerivedExt().getAtomicMetricId() != null) {
+            atomicMetric = metricRepository.findById(metric.getDerivedExt().getAtomicMetricId());
         }
+        if (metric.getMetricType() == MetricType.COMPOSITE
+                && metric.getCompositeExt() != null
+                && metric.getCompositeExt().getMetricRefs() != null) {
+            refMetrics = metric.getCompositeExt().getMetricRefs().stream()
+                    .map(metricRepository::findById)
+                    .filter(Objects::nonNull)
+                    .toList();
+        }
+        metricFieldLineageSyncService.sync(metric, atomicMetric, refMetrics);
     }
 
     /**

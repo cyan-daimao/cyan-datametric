@@ -1,8 +1,9 @@
 package com.cyan.datametric.infra.gateway;
 
+import com.cyan.arch.common.api.BusinessException;
+import com.cyan.arch.common.api.Response;
 import com.cyan.dataman.client.lineage.MetadataLineageClient;
 import com.cyan.dataman.client.lineage.request.MetadataLineageSyncRequest;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
 /**
@@ -11,9 +12,10 @@ import org.springframework.stereotype.Component;
  * @author cy.Y
  * @since 1.0.0
  */
-@Slf4j
 @Component
 public class MetadataLineageGateway {
+
+    private static final int SUCCESS_CODE = 200;
 
     private final MetadataLineageClient metadataLineageClient;
 
@@ -25,10 +27,12 @@ public class MetadataLineageGateway {
      * 同步血缘
      */
     public void sync(MetadataLineageSyncRequest request) {
-        try {
-            metadataLineageClient.sync(request);
-        } catch (Exception e) {
-            log.warn("同步 datametric 血缘失败, serviceName={}, refId={}", request.getServiceName(), request.getRefId(), e);
+        Response<Void> response = metadataLineageClient.sync(request);
+        if (response == null) {
+            throw new BusinessException("同步指标字段血缘失败：元数据服务无响应");
+        }
+        if (response.getCode() != SUCCESS_CODE) {
+            throw new BusinessException("同步指标字段血缘失败：" + response.getMessage());
         }
     }
 }
