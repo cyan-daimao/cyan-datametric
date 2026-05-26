@@ -13,6 +13,9 @@ import com.cyan.datametric.client.dto.MetricBiAnalysisCmd;
 import com.cyan.datametric.domain.config.Dimension;
 import com.cyan.datametric.domain.config.repository.DimensionRepository;
 import com.cyan.datametric.infra.gateway.SqlGateway;
+import com.cyan.datametric.infra.gateway.TableRelationGateway;
+import com.cyan.dataman.client.table.dto.JoinPathsRequestDTO;
+import com.cyan.dataman.client.table.dto.TableRelationDTO;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -22,9 +25,11 @@ import org.springframework.util.StringUtils;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
@@ -38,13 +43,12 @@ import java.util.stream.Collectors;
 public class MetricAudienceSelectionServiceImpl implements MetricAudienceSelectionService {
 
     private static final String DEFAULT_ENTITY_TYPE = "USER";
-    private static final String DEFAULT_ENTITY_ID_COLUMN = "user_id";
     private static final String ENTITY_ID_ALIAS = "entity_id";
-    private static final String PHYSICAL_ENTITY_ID_DIMENSION = "__PHYSICAL_ENTITY_ID__";
 
     private final BiAnalysisService biAnalysisService;
     private final DimensionRepository dimensionRepository;
     private final SqlGateway sqlGateway;
+    private final TableRelationGateway tableRelationGateway;
 
     @Value("${cyan.datametric.default-catalog:iceberg}")
     private String defaultCatalog;
@@ -52,8 +56,10 @@ public class MetricAudienceSelectionServiceImpl implements MetricAudienceSelecti
     @Override
     public MetricAudienceSelectionSqlDTO compile(MetricAudienceSelectionCmd cmd, String executor) {
         validate(cmd);
+        DimensionSqlInfo entityIdDimension = resolveDimension(cmd.getEntityIdDimCode());
+        cmd.setEntityIdColumn(resolvePhysicalColumn(entityIdDimension.dimension));
         boolean metricSelection = hasMetrics(cmd);
-        String baseSql = metricSelection ? buildMetricSelectionSql(cmd) : buildDimensionSelectionSql(cmd);
+        String baseSql = metricSelection ? buildMetricSelectionSql(cmd, entityIdDimension) : buildDimensionSelectionSql(cmd, entityIdDimension);
         String sourceEntityColumn = ENTITY_ID_ALIAS;
         String metricFilterSql = buildMetricOuterFilter(cmd);
         String wrappedSql = "SELECT * FROM (" + baseSql + ") audience_base";
@@ -102,10 +108,9 @@ public class MetricAudienceSelectionServiceImpl implements MetricAudienceSelecti
         if (!StringUtils.hasText(cmd.getEntityType())) {
             cmd.setEntityType(DEFAULT_ENTITY_TYPE);
         }
-        if (!StringUtils.hasText(cmd.getEntityIdColumn())) {
-            cmd.setEntityIdColumn(DEFAULT_ENTITY_ID_COLUMN);
+        if (!StringUtils.hasText(cmd.getEntityIdDimCode())) {
+            throw new BusinessException("实体ID维度不能为空");
         }
-        validateIdentifier(cmd.getEntityIdColumn(), "实体ID字段");
         if (!hasMetrics(cmd)) {
             if (cmd.getFilters() == null || cmd.getFilters().stream().noneMatch(filter -> StringUtils.hasText(filter.getDimCode()))) {
                 throw new BusinessException("无指标圈选至少需要一个维度过滤条件");
@@ -127,43 +132,82 @@ public class MetricAudienceSelectionServiceImpl implements MetricAudienceSelecti
     /**
      * 构建指标聚合圈选SQL
      */
-    private String buildMetricSelectionSql(MetricAudienceSelectionCmd cmd) {
-        MetricBiAnalysisCmd baseCmd = buildBaseCmd(cmd);
+    private String buildMetricSelectionSql(MetricAudienceSelectionCmd cmd, DimensionSqlInfo entityIdDimension) {
+        MetricBiAnalysisCmd baseCmd = buildBaseCmd(cmd, entityIdDimension);
         return stripTailLimit(biAnalysisService.previewSql(baseCmd));
     }
 
     /**
      * 构建无指标维度圈选SQL
      */
-    private String buildDimensionSelectionSql(MetricAudienceSelectionCmd cmd) {
-        Map<String, Dimension> dimensionMap = resolveDimensionMap(cmd);
-        Dimension tableDimension = dimensionMap.values().stream()
-                .filter(dimension -> StringUtils.hasText(dimension.getTableName()))
-                .findFirst()
-                .orElseThrow(() -> new BusinessException("无指标圈选至少需要一个关联维表的维度"));
-        String tableRef = buildDimensionTableRef(tableDimension.getSchemaName(), tableDimension.getTableName());
+    private String buildDimensionSelectionSql(MetricAudienceSelectionCmd cmd, DimensionSqlInfo entityIdDimension) {
+        if (!StringUtils.hasText(entityIdDimension.tableRef)) {
+            throw new BusinessException("实体ID维度必须配置关联维表");
+        }
+        Map<String, DimensionSqlInfo> dimensionMap = resolveFilterDimensionMap(cmd);
+        Map<String, String> aliasMap = new LinkedHashMap<>();
+        aliasMap.put(entityIdDimension.tableRef, "e");
+
+        Set<String> dimTableRefs = new LinkedHashSet<>();
+        for (DimensionSqlInfo dimension : dimensionMap.values()) {
+            if (!StringUtils.hasText(dimension.tableRef)) {
+                throw new BusinessException("过滤维度必须配置关联维表: " + dimension.dimension.getDimCode());
+            }
+            if (!Objects.equals(entityIdDimension.tableRef, dimension.tableRef)) {
+                dimTableRefs.add(dimension.tableRef);
+            }
+        }
+
+        List<TableRelationDTO> joins = dimTableRefs.isEmpty()
+                ? List.of()
+                : findJoinPaths(entityIdDimension.tableRef, new ArrayList<>(dimTableRefs));
+        validateJoinCoverage(entityIdDimension.tableRef, dimTableRefs, joins);
+        int aliasIndex = 1;
+        for (TableRelationDTO join : joins) {
+            String dimTable = join.getTargetCatalog() + "." + join.getTargetSchema() + "." + join.getTargetTable();
+            if (!aliasMap.containsKey(dimTable)) {
+                aliasMap.put(dimTable, "d" + aliasIndex);
+                aliasIndex++;
+            }
+        }
+
         List<String> conditions = new ArrayList<>();
         for (MetricBiAnalysisCmd.FilterRef filter : cmd.getFilters()) {
-            Dimension dimension = dimensionMap.get(filter.getDimCode());
-            if (dimension == null) {
-                throw new BusinessException("过滤维度不存在: " + filter.getDimCode());
-            }
-            String currentTableRef = buildDimensionTableRef(dimension.getSchemaName(), dimension.getTableName());
-            if (!Objects.equals(tableRef, currentTableRef)) {
-                throw new BusinessException("无指标圈选暂不支持跨维表过滤");
-            }
-            String condition = buildFilterCondition(resolveDimensionExpression(dimension), filter.getOperator(), filter.getValues());
+            DimensionSqlInfo filterDimension = dimensionMap.get(filter.getDimCode());
+            String alias = resolveFilterAlias(entityIdDimension.tableRef, filterDimension, aliasMap);
+            String condition = buildFilterCondition(qualifyExpression(filterDimension.expression, alias), filter.getOperator(), filter.getValues());
             if (StringUtils.hasText(condition)) {
                 conditions.add(condition);
             }
         }
         StringBuilder sql = new StringBuilder();
-        sql.append("SELECT DISTINCT `")
-                .append(escapeIdentifier(cmd.getEntityIdColumn()))
-                .append("` AS `")
+        sql.append("SELECT DISTINCT ")
+                .append(qualifyExpression(entityIdDimension.expression, aliasMap.get(entityIdDimension.tableRef)))
+                .append(" AS `")
                 .append(ENTITY_ID_ALIAS)
                 .append("` FROM ")
-                .append(tableRef);
+                .append(entityIdDimension.tableRef)
+                .append(" ")
+                .append(aliasMap.get(entityIdDimension.tableRef));
+        for (TableRelationDTO join : joins) {
+            String dimTable = join.getTargetCatalog() + "." + join.getTargetSchema() + "." + join.getTargetTable();
+            String alias = aliasMap.get(dimTable);
+            sql.append(" ")
+                    .append(StringUtils.hasText(join.getJoinType()) ? join.getJoinType() : "LEFT")
+                    .append(" JOIN ")
+                    .append(dimTable)
+                    .append(" ")
+                    .append(alias)
+                    .append(" ON ")
+                    .append(aliasMap.get(entityIdDimension.tableRef))
+                    .append(".`")
+                    .append(escapeIdentifier(join.getSourceColumn()))
+                    .append("` = ")
+                    .append(alias)
+                    .append(".`")
+                    .append(escapeIdentifier(join.getTargetColumn()))
+                    .append("`");
+        }
         if (!conditions.isEmpty()) {
             sql.append(" WHERE ").append(String.join(" AND ", conditions));
         }
@@ -171,40 +215,51 @@ public class MetricAudienceSelectionServiceImpl implements MetricAudienceSelecti
     }
 
     /**
-     * 解析圈选维度
+     * 解析过滤维度
      */
-    private Map<String, Dimension> resolveDimensionMap(MetricAudienceSelectionCmd cmd) {
-        Map<String, Dimension> dimensionMap = new LinkedHashMap<>();
+    private Map<String, DimensionSqlInfo> resolveFilterDimensionMap(MetricAudienceSelectionCmd cmd) {
+        Map<String, DimensionSqlInfo> dimensionMap = new LinkedHashMap<>();
         if (cmd.getFilters() != null) {
             for (MetricBiAnalysisCmd.FilterRef filter : cmd.getFilters()) {
-                putDimension(dimensionMap, filter.getDimCode());
+                putFilterDimension(dimensionMap, filter.getDimCode());
             }
         }
         return dimensionMap;
     }
 
     /**
-     * 添加维度
+     * 添加过滤维度
      */
-    private void putDimension(Map<String, Dimension> dimensionMap, String dimCode) {
+    private void putFilterDimension(Map<String, DimensionSqlInfo> dimensionMap, String dimCode) {
         if (!StringUtils.hasText(dimCode) || dimensionMap.containsKey(dimCode)) {
             return;
         }
-        Dimension dimension = dimensionRepository.findByDimCode(dimCode);
-        if (dimension == null) {
-            throw new BusinessException("维度不存在: " + dimCode);
+        dimensionMap.put(dimCode, resolveDimension(dimCode));
+    }
+
+    /**
+     * 解析过滤维度表别名
+     */
+    private String resolveFilterAlias(String entityTableRef, DimensionSqlInfo filterDimension, Map<String, String> aliasMap) {
+        if (filterDimension == null) {
+            throw new BusinessException("过滤维度不存在");
         }
-        dimensionMap.put(dimCode, dimension);
+        String alias = aliasMap.get(filterDimension.tableRef);
+        if (StringUtils.hasText(alias)) {
+            return alias;
+        }
+        throw new BusinessException("实体ID维度表 '" + entityTableRef + "' 与过滤维度表 '" + filterDimension.tableRef
+                + "' 未配置关联关系，请在元数据平台配置表关系后再圈选");
     }
 
     /**
      * 构建用于内层聚合的 BI DSL
      */
-    private MetricBiAnalysisCmd buildBaseCmd(MetricAudienceSelectionCmd cmd) {
+    private MetricBiAnalysisCmd buildBaseCmd(MetricAudienceSelectionCmd cmd, DimensionSqlInfo entityIdDimension) {
         MetricBiAnalysisCmd baseCmd = new MetricBiAnalysisCmd();
         baseCmd.setChartType("TABLE");
         baseCmd.setMetrics(cmd.getMetrics());
-        baseCmd.setDimensions(buildDimensions(cmd));
+        baseCmd.setDimensions(buildDimensions(cmd, entityIdDimension));
         baseCmd.setFilters(cmd.getFilters() == null ? List.of() : cmd.getFilters().stream()
                 .filter(filter -> !StringUtils.hasText(filter.getMetricCode()))
                 .toList());
@@ -216,16 +271,13 @@ public class MetricAudienceSelectionServiceImpl implements MetricAudienceSelecti
     /**
      * 构建包含实体ID维度的维度列表
      */
-    private List<MetricBiAnalysisCmd.DimensionRef> buildDimensions(MetricAudienceSelectionCmd cmd) {
-        String entityIdColumn = StringUtils.hasText(cmd.getEntityIdColumn())
-                ? cmd.getEntityIdColumn()
-                : DEFAULT_ENTITY_ID_COLUMN;
+    private List<MetricBiAnalysisCmd.DimensionRef> buildDimensions(MetricAudienceSelectionCmd cmd, DimensionSqlInfo entityIdDimension) {
         Map<String, MetricBiAnalysisCmd.DimensionRef> dimensionMap = new LinkedHashMap<>();
         MetricBiAnalysisCmd.DimensionRef entityIdRef = new MetricBiAnalysisCmd.DimensionRef()
-                .setDimCode(entityIdColumn)
+                .setDimCode(entityIdDimension.dimension.getDimCode())
                 .setAlias(ENTITY_ID_ALIAS)
-                .setDimName(PHYSICAL_ENTITY_ID_DIMENSION);
-        dimensionMap.put(entityIdColumn, entityIdRef);
+                .setDimName(entityIdDimension.dimension.getDimName());
+        dimensionMap.put(entityIdDimension.dimension.getDimCode(), entityIdRef);
         if (cmd.getDimensions() != null) {
             for (MetricBiAnalysisCmd.DimensionRef ref : cmd.getDimensions()) {
                 if (ref != null && StringUtils.hasText(ref.getDimCode()) && !dimensionMap.containsKey(ref.getDimCode())) {
@@ -355,8 +407,18 @@ public class MetricAudienceSelectionServiceImpl implements MetricAudienceSelecti
         String sourceType = StringUtils.hasText(dimension.getSourceType()) ? dimension.getSourceType() : "COLUMN";
         return switch (sourceType) {
             case "JSON_PATH" -> "JSON_VALUE(properties, '" + escapeValue(resolveJsonPath(dimension)) + "')";
-            case "EXPRESSION" -> dimension.getSourceExpr();
-            default -> "`" + escapeIdentifier(dimension.getColumnName()) + "`";
+            case "EXPRESSION" -> {
+                if (!StringUtils.hasText(dimension.getSourceExpr())) {
+                    throw new BusinessException("表达式维度未配置SQL表达式: " + dimension.getDimCode());
+                }
+                yield dimension.getSourceExpr();
+            }
+            default -> {
+                if (!StringUtils.hasText(dimension.getColumnName())) {
+                    throw new BusinessException("字段维度未配置物理字段: " + dimension.getDimCode());
+                }
+                yield "`" + escapeIdentifier(dimension.getColumnName()) + "`";
+            }
         };
     }
 
@@ -368,6 +430,105 @@ public class MetricAudienceSelectionServiceImpl implements MetricAudienceSelecti
             return dimension.getSourceExpr();
         }
         return "$.properties." + dimension.getColumnName();
+    }
+
+    /**
+     * 解析维度SQL信息
+     */
+    private DimensionSqlInfo resolveDimension(String dimCode) {
+        if (!StringUtils.hasText(dimCode)) {
+            throw new BusinessException("维度编码不能为空");
+        }
+        Dimension dimension = dimensionRepository.findByDimCode(dimCode);
+        if (dimension == null) {
+            throw new BusinessException("维度不存在: " + dimCode);
+        }
+        String expression = resolveDimensionExpression(dimension);
+        if (!StringUtils.hasText(expression)) {
+            throw new BusinessException("维度未配置物理字段: " + dimCode);
+        }
+        String tableRef = StringUtils.hasText(dimension.getTableName())
+                ? buildDimensionTableRef(dimension.getSchemaName(), dimension.getTableName())
+                : null;
+        return new DimensionSqlInfo(dimension, tableRef, expression);
+    }
+
+    /**
+     * 解析物理字段名
+     */
+    private String resolvePhysicalColumn(Dimension dimension) {
+        return StringUtils.hasText(dimension.getColumnName()) ? dimension.getColumnName() : dimension.getDimCode();
+    }
+
+    /**
+     * 字段表达式补充表别名
+     */
+    private String qualifyExpression(String expression, String alias) {
+        if (!StringUtils.hasText(alias) || !StringUtils.hasText(expression)) {
+            return expression;
+        }
+        if (expression.startsWith("`") && expression.endsWith("`")) {
+            return alias + "." + expression;
+        }
+        if (expression.matches("[A-Za-z_][A-Za-z0-9_]*")) {
+            return alias + ".`" + escapeIdentifier(expression) + "`";
+        }
+        if (expression.startsWith("JSON_VALUE(properties,")) {
+            return expression.replaceFirst("JSON_VALUE\\(properties,", "JSON_VALUE(" + alias + ".`properties`,");
+        }
+        if (expression.startsWith("JSON_VALUE(`properties`,")) {
+            return expression.replaceFirst("JSON_VALUE\\(`properties`,", "JSON_VALUE(" + alias + ".`properties`,");
+        }
+        if (expression.contains("`")) {
+            return expression.replaceAll("(?<![A-Za-z0-9_]\\.)`([^`]+)`", alias + ".`$1`");
+        }
+        return expression;
+    }
+
+    /**
+     * 查询实体ID表到过滤维表的关联路径
+     */
+    private List<TableRelationDTO> findJoinPaths(String sourceTableRef, List<String> dimTableRefs) {
+        String[] parts = sourceTableRef.split("\\.");
+        if (parts.length != 3) {
+            throw new BusinessException("实体ID维度表引用格式错误，期望 catalog.schema.table，实际: " + sourceTableRef);
+        }
+        JoinPathsRequestDTO request = new JoinPathsRequestDTO()
+                .setFactTable(new JoinPathsRequestDTO.TableRefDTO(parts[0], parts[1], parts[2]))
+                .setDimensionTables(dimTableRefs.stream()
+                        .map(ref -> {
+                            String[] dimParts = ref.split("\\.");
+                            if (dimParts.length != 3) {
+                                throw new BusinessException("过滤维度表引用格式错误，期望 catalog.schema.table，实际: " + ref);
+                            }
+                            return new JoinPathsRequestDTO.TableRefDTO(dimParts[0], dimParts[1], dimParts[2]);
+                        })
+                        .toList());
+        Response<List<TableRelationDTO>> response = tableRelationGateway.findJoinPaths(request);
+        if (response == null || response.getData() == null) {
+            throw new BusinessException(response != null && StringUtils.hasText(response.getMessage())
+                    ? response.getMessage()
+                    : "查询实体ID维度与过滤维度关联关系失败");
+        }
+        return response.getData();
+    }
+
+    /**
+     * 校验过滤维表关联覆盖
+     */
+    private void validateJoinCoverage(String entityTableRef, Set<String> dimTableRefs, List<TableRelationDTO> joins) {
+        if (dimTableRefs.isEmpty()) {
+            return;
+        }
+        Set<String> joinedTables = joins.stream()
+                .map(join -> join.getTargetCatalog() + "." + join.getTargetSchema() + "." + join.getTargetTable())
+                .collect(Collectors.toSet());
+        for (String dimTableRef : dimTableRefs) {
+            if (!joinedTables.contains(dimTableRef)) {
+                throw new BusinessException("实体ID维度表 '" + entityTableRef + "' 与过滤维度表 '" + dimTableRef
+                        + "' 未配置关联关系，请在元数据平台配置表关系后再圈选");
+            }
+        }
     }
 
     /**
@@ -398,11 +559,28 @@ public class MetricAudienceSelectionServiceImpl implements MetricAudienceSelecti
     }
 
     /**
-     * 校验物理字段名
+     * 维度SQL信息
      */
-    private void validateIdentifier(String value, String name) {
-        if (!value.matches("[A-Za-z_][A-Za-z0-9_]*")) {
-            throw new BusinessException(name + "只能是物理字段名");
+    private static class DimensionSqlInfo {
+
+        /** 维度领域对象 */
+        private final Dimension dimension;
+        /** 维度表引用 */
+        private final String tableRef;
+        /** 维度SQL表达式 */
+        private final String expression;
+
+        /**
+         * 创建维度SQL信息
+         *
+         * @param dimension 维度领域对象
+         * @param tableRef 维度表引用
+         * @param expression 维度SQL表达式
+         */
+        private DimensionSqlInfo(Dimension dimension, String tableRef, String expression) {
+            this.dimension = dimension;
+            this.tableRef = tableRef;
+            this.expression = expression;
         }
     }
 }

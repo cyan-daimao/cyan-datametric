@@ -39,8 +39,6 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class BiAnalysisServiceImpl implements BiAnalysisService {
 
-    private static final String PHYSICAL_ENTITY_ID_DIMENSION = "__PHYSICAL_ENTITY_ID__";
-
     private final MetricRepository metricRepository;
     private final DimensionRepository dimensionRepository;
     private final SqlGateway sqlGateway;
@@ -66,10 +64,10 @@ public class BiAnalysisServiceImpl implements BiAnalysisService {
 
             if (result == null) {
                 log.error("指标 BI 分析 SQL 执行结果为空, executor={}, sql={}, responseMessage={}",
-                        executor, sql, response != null ? response.getMessage() : null);
+                        executor, sql, response.getMessage());
                 return metricBiAnalysisAppConvert.toChartDataBO(
                         "FAILED", cost, new ArrayList<>(), new ArrayList<>(), sql,
-                        chartType, response != null && response.getMessage() != null ? response.getMessage() : "执行失败");
+                        chartType, response.getMessage() != null ? response.getMessage() : "执行失败");
             }
 
             List<Map<String, Object>> rows = result.getData() != null ? result.getData() : List.of();
@@ -540,16 +538,6 @@ public class BiAnalysisServiceImpl implements BiAnalysisService {
 
         Dimension dim = dimensionRepository.findByDimCode(dimCode);
         if (dim == null) {
-            if (PHYSICAL_ENTITY_ID_DIMENSION.equals(ref.getDimName())) {
-                validatePhysicalColumn(dimCode);
-                DimensionInfo info = new DimensionInfo();
-                info.dimCode = dimCode;
-                info.columnName = "`" + dimCode + "`";
-                info.alias = StringUtils.hasText(ref.getAlias()) ? ref.getAlias() : dimCode;
-                info.tableName = null;
-                info.displayColumn = null;
-                return info;
-            }
             throw new BusinessException("维度 '" + dimCode + "' 不存在");
         }
         String columnExpr = resolveDimensionExpression(dim);
@@ -595,15 +583,6 @@ public class BiAnalysisServiceImpl implements BiAnalysisService {
      */
     private String escapeSql(String value) {
         return value == null ? "" : value.replace("'", "''");
-    }
-
-    /**
-     * 校验物理字段名
-     */
-    private void validatePhysicalColumn(String columnName) {
-        if (!columnName.matches("[A-Za-z_][A-Za-z0-9_]*")) {
-            throw new BusinessException("物理字段名格式不正确: " + columnName);
-        }
     }
 
     // ==================== 过滤条件解析 ====================

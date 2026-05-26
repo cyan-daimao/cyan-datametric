@@ -26,7 +26,12 @@ public class MetricAudienceSelectionCmd {
     private String entityType;
 
     /**
-     * 实体ID物理字段名
+     * 实体ID维度编码
+     */
+    private String entityIdDimCode;
+
+    /**
+     * 实体ID物理字段名（兼容旧规则）
      */
     private String entityIdColumn;
 
