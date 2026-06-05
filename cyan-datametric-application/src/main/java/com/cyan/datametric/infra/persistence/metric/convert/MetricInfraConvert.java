@@ -1,6 +1,6 @@
 package com.cyan.datametric.infra.persistence.metric.convert;
 
-import com.cyan.arch.common.mapstruct.MapstructConvert;
+import com.cyan.arch.base.mapstruct.MapstructConvert;
 import com.cyan.arch.common.util.JSON;
 import com.cyan.datametric.domain.metric.Metric;
 import com.cyan.datametric.domain.metric.MetricAtomicExt;
@@ -26,9 +26,49 @@ import java.util.List;
 @Mapper(componentModel = "spring", uses = MapstructConvert.class)
 public interface MetricInfraConvert {
 
-    Metric toMetric(MetricDefinitionDO def);
+    default Metric toMetric(MetricDefinitionDO def) {
+        if (def == null) return null;
+        Metric metric = new Metric();
+        metric.setId(def.getId() == null ? null : String.valueOf(def.getId()));
+        metric.setMetricCode(def.getMetricCode());
+        metric.setMetricName(def.getMetricName());
+        metric.setMetricType(def.getMetricType());
+        metric.setSubjectCode(def.getSubjectCode());
+        metric.setBizCaliber(def.getBizCaliber());
+        metric.setTechCaliber(def.getTechCaliber());
+        metric.setStatus(def.getStatus());
+        metric.setSecurityLevel(def.getSecurityLevel());
+        metric.setOwner(def.getOwner());
+        metric.setVersion(def.getVersion());
+        metric.setCreateBy(def.getCreateBy());
+        metric.setUpdateBy(def.getUpdateBy());
+        metric.setCreatedAt(def.getCreatedAt());
+        metric.setUpdatedAt(def.getUpdatedAt());
+        return metric;
+    }
 
-    MetricDefinitionDO toMetricDefinitionDO(Metric metric);
+    default MetricDefinitionDO toMetricDefinitionDO(Metric metric) {
+        if (metric == null) return null;
+        MetricDefinitionDO def = new MetricDefinitionDO();
+        if (metric.getId() != null) {
+            def.setId(Long.parseLong(metric.getId()));
+        }
+        def.setMetricCode(metric.getMetricCode());
+        def.setMetricName(metric.getMetricName());
+        def.setMetricType(metric.getMetricType());
+        def.setSubjectCode(metric.getSubjectCode());
+        def.setBizCaliber(metric.getBizCaliber());
+        def.setTechCaliber(metric.getTechCaliber());
+        def.setStatus(metric.getStatus());
+        def.setSecurityLevel(metric.getSecurityLevel());
+        def.setOwner(metric.getOwner());
+        def.setVersion(metric.getVersion());
+        def.setCreateBy(metric.getCreateBy());
+        def.setUpdateBy(metric.getUpdateBy());
+        def.setCreatedAt(metric.getCreatedAt());
+        def.setUpdatedAt(metric.getUpdatedAt());
+        return def;
+    }
 
     default MetricAtomicExt toAtomicExt(MetricAtomicDO atomic) {
         if (atomic == null) return null;
@@ -134,6 +174,7 @@ public interface MetricInfraConvert {
         d.setBizCaliber(metric.getBizCaliber());
         d.setTechCaliber(metric.getTechCaliber());
         d.setStatus(metric.getStatus() == null ? null : metric.getStatus().name());
+        d.setSecurityLevel(metric.getSecurityLevel());
         d.setOwner(metric.getOwner());
         d.setVersion(metric.getVersion());
         d.setCreateBy(metric.getCreateBy());
@@ -177,6 +218,7 @@ public interface MetricInfraConvert {
         metric.setBizCaliber(history.getBizCaliber());
         metric.setTechCaliber(history.getTechCaliber());
         metric.setStatus(history.getStatus() == null ? null : com.cyan.datametric.enums.MetricStatus.valueOf(history.getStatus()));
+        metric.setSecurityLevel(history.getSecurityLevel());
         metric.setOwner(history.getOwner());
         metric.setVersion(history.getVersion());
         metric.setCreateBy(history.getCreateBy());

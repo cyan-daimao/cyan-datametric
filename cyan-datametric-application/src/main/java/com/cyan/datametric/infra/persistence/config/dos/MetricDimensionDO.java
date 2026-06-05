@@ -1,5 +1,6 @@
 package com.cyan.datametric.infra.persistence.config.dos;
 
+import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableLogic;
@@ -27,7 +28,7 @@ public class MetricDimensionDO {
     /**
      * 主键
      */
-    @TableId("id")
+    @TableId(value = "id", type = IdType.ASSIGN_ID)
     private Long id;
 
     /**
@@ -89,6 +90,24 @@ public class MetricDimensionDO {
      */
     @TableField("display_column")
     private String displayColumn;
+
+    /**
+     * 来源类型：COLUMN/JSON_PATH/EXPRESSION
+     */
+    @TableField("source_type")
+    private String sourceType;
+
+    /**
+     * 来源表达式
+     */
+    @TableField("source_expr")
+    private String sourceExpr;
+
+    /**
+     * 来源事实表
+     */
+    @TableField("source_table")
+    private String sourceTable;
 
     /**
      * 描述

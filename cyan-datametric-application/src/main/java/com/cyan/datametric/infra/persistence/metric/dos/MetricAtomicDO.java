@@ -1,13 +1,17 @@
 package com.cyan.datametric.infra.persistence.metric.dos;
 
+import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
+import com.baomidou.mybatisplus.annotation.TableLogic;
 import com.baomidou.mybatisplus.annotation.TableName;
 import com.cyan.datametric.enums.StatFunc;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.experimental.Accessors;
+
+import java.time.LocalDateTime;
 
 /**
  * 原子指标扩展表
@@ -25,7 +29,7 @@ public class MetricAtomicDO {
     /**
      * 主键
      */
-    @TableId("id")
+    @TableId(value = "id", type = IdType.ASSIGN_ID)
     private Long id;
 
     /**
@@ -69,4 +73,11 @@ public class MetricAtomicDO {
      */
     @TableField("filter_condition")
     private String filterCondition;
+
+    /**
+     * 逻辑删除时间
+     */
+    @TableField("deleted_at")
+    @TableLogic(value = "null", delval = "now()")
+    private LocalDateTime deletedAt;
 }

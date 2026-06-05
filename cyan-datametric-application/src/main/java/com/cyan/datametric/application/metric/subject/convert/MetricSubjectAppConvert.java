@@ -1,6 +1,6 @@
 package com.cyan.datametric.application.metric.subject.convert;
 
-import com.cyan.arch.common.mapstruct.MapstructConvert;
+import com.cyan.arch.base.mapstruct.MapstructConvert;
 import com.cyan.datametric.application.metric.subject.bo.MetricSubjectBO;
 import com.cyan.datametric.application.metric.subject.cmd.MetricSubjectCmd;
 import com.cyan.datametric.domain.metric.subject.MetricSubject;

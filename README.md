@@ -127,6 +127,67 @@ cyan-datametric/
 
 ---
 
+## 🧩 物理表、虚拟表、指标、维度关系
+
+当前主干实现中，**物理表**由 `cyan-dataman` 的元数据中心管理，**指标**和**维度**由 `cyan-datametric` 管理；“虚拟表 / 逻辑表”还没有作为独立领域对象正式落表。
+
+```mermaid
+flowchart LR
+    PT["物理表 MetadataTable<br/>metadata_table<br/>catalog / schema / table / columns"]
+    TR["表关系 TableRelation<br/>sourceColumn -> targetColumn"]
+    VT["虚拟表 / 逻辑表<br/>当前未正式落表<br/>建议作为语义层抽象"]
+    M["指标 Metric<br/>metric_definition"]
+    AM["原子指标<br/>metric_atomic<br/>dbName / tblName / colName / statFunc"]
+    DM["派生指标<br/>原子指标 + 时间周期 + 修饰词"]
+    CM["复合指标<br/>多个指标公式组合"]
+    D["维度 Dimension<br/>metric_dimension<br/>tableName / columnName / displayColumn"]
+
+    PT --> TR
+    PT --> AM
+    PT --> D
+    M --> AM
+    M --> DM
+    M --> CM
+    DM --> AM
+    CM --> M
+    PT -.推荐演进.-> VT
+    VT -.推荐演进.-> M
+    VT -.推荐演进.-> D
+```
+
+### 当前实现关系
+
+| 对象 | 所属服务 | 核心表 / 对象 | 当前关系 |
+|------|----------|---------------|----------|
+| 物理表 | `cyan-dataman` | `MetadataTable` / `metadata_table` | 保存真实表元数据：`data_catalog`、`data_schema`、`tbl`、字段、主题域、分层、密级等 |
+| 表关系 | `cyan-dataman` | `TableRelation` | 描述表之间可 JOIN 的字段关系：`sourceTable.sourceColumn -> targetTable.targetColumn` |
+| 指标 | `cyan-datametric` | `metric_definition` | 指标主表，承载原子、派生、复合三类指标的公共信息 |
+| 原子指标 | `cyan-datametric` | `metric_atomic` | 直接绑定物理表字段：`db_name`、`tbl_name`、`col_name`、`stat_func` |
+| 派生指标 | `cyan-datametric` | `metric_derived` | 基于原子指标叠加时间周期、修饰词、维度分组 |
+| 复合指标 | `cyan-datametric` | `metric_composite` | 通过公式引用其他指标计算 |
+| 维度 | `cyan-datametric` | `metric_dimension` | 绑定维度字段或表达式：`table_name`、`column_name`、`display_column`、`source_type`、`source_expr` |
+| 虚拟表 / 逻辑表 | 暂未落地 | 暂无正式表结构 | 当前只存在语义层规划，不参与主干 SQL 生成 |
+
+### 当前 SQL 生成约束
+
+- 原子指标直接使用 `metric_atomic.db_name + tbl_name + col_name` 生成聚合表达式。
+- BI 分析会检查多个基础指标是否来自同一事实表，当前不支持多事实表自动 JOIN。
+- 维度主要提供 `columnName` / `sourceExpr` 参与 `SELECT`、`GROUP BY`、`WHERE`。
+- 当前一期不做维度表 JOIN；`metric_dimension.tableName` 更像维度元数据来源，不会自动和事实表建立 JOIN。
+- 表关系网关已经具备查询 JOIN 路径的能力，但语义层自动 JOIN 还不是当前主干的稳定能力。
+
+### 推荐演进方向
+
+后续如果要支持稳定的跨表指标分析、维表 JOIN、语义模型复用和血缘治理，建议引入正式的“虚拟表 / 逻辑表”层：
+
+```text
+物理表 -> 虚拟表 / 逻辑表 -> 指标 / 维度
+```
+
+虚拟表可以表示单物理表映射、SQL View、多表 Join 宽表、物化视图或业务对象表。指标和维度后续应优先绑定 `logical_table_id + field_code / field_expr`，减少直接绑定物理库表字段带来的变更成本。
+
+---
+
 ## 🚀 快速开始
 
 ### 环境要求

@@ -23,6 +23,7 @@ public class DictionaryMetricDTO {
     private String subjectName;
     private String bizCaliber;
     private String status;
+    private String securityLevel;
     private LocalDateTime updatedAt;
     private Boolean isFavorite;
 }

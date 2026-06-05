@@ -65,6 +65,11 @@ public class Metric {
     private MetricStatus status;
 
     /**
+     * 数据密级
+     */
+    private String securityLevel;
+
+    /**
      * 负责人
      */
     private String owner;
@@ -93,6 +98,11 @@ public class Metric {
      * 更新时间
      */
     private LocalDateTime updatedAt;
+
+    /**
+     * 逻辑删除时间
+     */
+    private LocalDateTime deletedAt;
 
     /**
      * 原子指标扩展
@@ -155,6 +165,7 @@ public class Metric {
         snap.setBizCaliber(this.bizCaliber);
         snap.setTechCaliber(this.techCaliber);
         snap.setStatus(this.status);
+        snap.setSecurityLevel(this.securityLevel);
         snap.setOwner(this.owner);
         snap.setVersion(this.version);
         snap.setCreateBy(this.createBy);

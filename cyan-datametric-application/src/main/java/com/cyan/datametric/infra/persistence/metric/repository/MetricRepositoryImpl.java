@@ -300,16 +300,119 @@ public class MetricRepositoryImpl implements MetricRepository {
     }
 
     private void updateExt(Metric metric) {
-        deleteExt(metric.getId());
-        saveExt(metric);
+        if (metric == null || metric.getMetricType() == null) {
+            return;
+        }
+        Long mid = Long.parseLong(metric.getId());
+        switch (metric.getMetricType()) {
+            case ATOMIC -> {
+                deleteDerivedExt(mid);
+                deleteCompositeExt(mid);
+                upsertAtomicExt(metric, mid);
+            }
+            case DERIVED -> {
+                deleteAtomicExt(mid);
+                deleteCompositeExt(mid);
+                upsertDerivedExt(metric, mid);
+            }
+            case COMPOSITE -> {
+                deleteAtomicExt(mid);
+                deleteDerivedExt(mid);
+                upsertCompositeExt(metric, mid);
+            }
+        }
     }
 
     private void deleteExt(String id) {
         Long mid = Long.parseLong(id);
+        deleteAtomicExt(mid);
+        deleteDerivedExt(mid);
+        deleteCompositeExt(mid);
+    }
+
+    /**
+     * 保存或更新原子指标扩展
+     */
+    private void upsertAtomicExt(Metric metric, Long mid) {
+        if (metric.getAtomicExt() == null) {
+            deleteAtomicExt(mid);
+            return;
+        }
+        MetricAtomicDO dataObject = metricInfraConvert.toAtomicDO(metric.getAtomicExt());
+        dataObject.setMetricId(mid);
+        MetricAtomicDO existing = atomicMapper.selectOne(new LambdaQueryWrapper<MetricAtomicDO>()
+                .eq(MetricAtomicDO::getMetricId, mid));
+        if (existing == null) {
+            dataObject.setId(SnowflakeIdUtil.nextId());
+            atomicMapper.insert(dataObject);
+            return;
+        }
+        dataObject.setId(existing.getId());
+        atomicMapper.updateById(dataObject);
+    }
+
+    /**
+     * 保存或更新派生指标扩展
+     */
+    private void upsertDerivedExt(Metric metric, Long mid) {
+        if (metric.getDerivedExt() == null) {
+            deleteDerivedExt(mid);
+            return;
+        }
+        MetricDerivedDO dataObject = metricInfraConvert.toDerivedDO(metric.getDerivedExt());
+        dataObject.setMetricId(mid);
+        MetricDerivedDO existing = derivedMapper.selectOne(new LambdaQueryWrapper<MetricDerivedDO>()
+                .eq(MetricDerivedDO::getMetricId, mid));
+        if (existing == null) {
+            dataObject.setId(SnowflakeIdUtil.nextId());
+            derivedMapper.insert(dataObject);
+            return;
+        }
+        dataObject.setId(existing.getId());
+        derivedMapper.updateById(dataObject);
+    }
+
+    /**
+     * 保存或更新复合指标扩展
+     */
+    private void upsertCompositeExt(Metric metric, Long mid) {
+        if (metric.getCompositeExt() == null) {
+            deleteCompositeExt(mid);
+            return;
+        }
+        MetricCompositeDO dataObject = metricInfraConvert.toCompositeDO(metric.getCompositeExt());
+        dataObject.setMetricId(mid);
+        MetricCompositeDO existing = compositeMapper.selectOne(new LambdaQueryWrapper<MetricCompositeDO>()
+                .eq(MetricCompositeDO::getMetricId, mid));
+        if (existing == null) {
+            dataObject.setId(SnowflakeIdUtil.nextId());
+            compositeMapper.insert(dataObject);
+            return;
+        }
+        dataObject.setId(existing.getId());
+        compositeMapper.updateById(dataObject);
+    }
+
+    /**
+     * 删除原子指标扩展
+     */
+    private void deleteAtomicExt(Long mid) {
         LambdaQueryWrapper<MetricAtomicDO> aw = new LambdaQueryWrapper<MetricAtomicDO>().eq(MetricAtomicDO::getMetricId, mid);
         atomicMapper.delete(aw);
+    }
+
+    /**
+     * 删除派生指标扩展
+     */
+    private void deleteDerivedExt(Long mid) {
         LambdaQueryWrapper<MetricDerivedDO> dw = new LambdaQueryWrapper<MetricDerivedDO>().eq(MetricDerivedDO::getMetricId, mid);
         derivedMapper.delete(dw);
+    }
+
+    /**
+     * 删除复合指标扩展
+     */
+    private void deleteCompositeExt(Long mid) {
         LambdaQueryWrapper<MetricCompositeDO> cw = new LambdaQueryWrapper<MetricCompositeDO>().eq(MetricCompositeDO::getMetricId, mid);
         compositeMapper.delete(cw);
     }

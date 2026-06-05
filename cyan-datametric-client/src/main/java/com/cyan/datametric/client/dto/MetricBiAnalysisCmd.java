@@ -56,6 +56,8 @@ public class MetricBiAnalysisCmd {
     public static class MetricRef {
         private String metricCode;
         private String alias;
+        /** 指标显示名称 */
+        private String metricName;
     }
 
     @Data
@@ -65,6 +67,8 @@ public class MetricBiAnalysisCmd {
     public static class DimensionRef {
         private String dimCode;
         private String alias;
+        /** 维度显示名称 */
+        private String dimName;
     }
 
     @Data

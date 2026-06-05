@@ -1,6 +1,6 @@
 package com.cyan.datametric.adapter.metric.http.convert;
 
-import com.cyan.arch.common.mapstruct.MapstructConvert;
+import com.cyan.arch.base.mapstruct.MapstructConvert;
 import com.cyan.datametric.adapter.metric.http.dto.*;
 import com.cyan.datametric.application.metric.bo.*;
 import org.mapstruct.Mapper;
@@ -26,6 +26,7 @@ public interface MetricAdapterConvert {
         dto.setBizCaliber(bo.getBizCaliber());
         dto.setTechCaliber(bo.getTechCaliber());
         dto.setStatus(bo.getStatus() == null ? null : bo.getStatus().getCode());
+        dto.setSecurityLevel(bo.getSecurityLevel());
         dto.setOwner(bo.getOwner());
         dto.setStatFunc(bo.getStatFunc());
         dto.setDsName(bo.getDsName());
@@ -48,6 +49,7 @@ public interface MetricAdapterConvert {
         dto.setSubjectName(bo.getSubjectName());
         dto.setBizCaliber(bo.getBizCaliber());
         dto.setStatus(bo.getStatus() == null ? null : bo.getStatus().getCode());
+        dto.setSecurityLevel(bo.getSecurityLevel());
         dto.setUpdatedAt(bo.getUpdatedAt());
         dto.setIsFavorite(bo.getIsFavorite());
         return dto;
@@ -65,6 +67,7 @@ public interface MetricAdapterConvert {
         dto.setBizCaliber(bo.getBizCaliber());
         dto.setTechCaliber(bo.getTechCaliber());
         dto.setStatus(bo.getStatus() == null ? null : bo.getStatus().getCode());
+        dto.setSecurityLevel(bo.getSecurityLevel());
         dto.setOwner(bo.getOwner());
         dto.setVersion(bo.getVersion());
         dto.setUpdatedAt(bo.getUpdatedAt());

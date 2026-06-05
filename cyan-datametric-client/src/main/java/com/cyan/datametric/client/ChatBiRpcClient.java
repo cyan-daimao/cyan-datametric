@@ -1,13 +1,9 @@
 package com.cyan.datametric.client;
 
 import com.cyan.arch.common.api.Response;
-import com.cyan.datametric.client.dto.MetricBiAnalysisCmd;
-import com.cyan.datametric.client.dto.MetricBiChartDataDTO;
 import org.springframework.cloud.openfeign.FeignClient;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestParam;
 
 import java.util.List;
@@ -18,7 +14,7 @@ import java.util.List;
  * @author cy.Y
  * @since 1.0.0
  */
-@FeignClient(name = "cyan-datametric", contextId = "cyan-datametric.chatbi", path = "/rpc/v1/metrics/bi")
+@FeignClient(name = "cyan-datametric", contextId = "chatBiRpcClient", path = "/rpc/v1/metrics/bi", url = "${feign.cyan-datametric.url:}")
 public interface ChatBiRpcClient {
 
     /**
@@ -44,16 +40,5 @@ public interface ChatBiRpcClient {
     @GetMapping("/dimensions/{dimCode}/values")
     Response<List<DimensionValueItem>> listDimensionValues(
             @PathVariable("dimCode") String dimCode);
-
-    /**
-     * 执行指标分析
-     */
-    @PostMapping("/analysis/execute")
-    Response<MetricBiChartDataDTO> executeAnalysis(@RequestBody MetricBiAnalysisCmd cmd);
-
-    /**
-     * 预览 SQL（不执行）
-     */
-    @PostMapping("/analysis/preview-sql")
-    Response<String> previewSql(@RequestBody MetricBiAnalysisCmd cmd);
 }
+

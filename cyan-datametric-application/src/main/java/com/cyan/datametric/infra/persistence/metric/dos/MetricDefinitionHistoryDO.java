@@ -1,7 +1,9 @@
 package com.cyan.datametric.infra.persistence.metric.dos;
 
 import com.baomidou.mybatisplus.annotation.IdType;
+import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
+import com.baomidou.mybatisplus.annotation.TableLogic;
 import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.Data;
 
@@ -10,7 +12,7 @@ import java.time.LocalDateTime;
 @Data
 @TableName("metric_definition_history")
 public class MetricDefinitionHistoryDO {
-    @TableId(type = IdType.AUTO)
+    @TableId(value = "id", type = IdType.ASSIGN_ID)
     private Long id;
     private String metricCode;
     private String metricName;
@@ -19,6 +21,7 @@ public class MetricDefinitionHistoryDO {
     private String bizCaliber;
     private String techCaliber;
     private String status;
+    private String securityLevel;
     private String owner;
     private Integer version;
     private String createBy;
@@ -27,4 +30,11 @@ public class MetricDefinitionHistoryDO {
     private LocalDateTime updatedAt;
     private String extJson;
     private LocalDateTime snapshotTime;
+
+    /**
+     * 逻辑删除时间
+     */
+    @TableField("deleted_at")
+    @TableLogic(value = "null", delval = "now()")
+    private LocalDateTime deletedAt;
 }

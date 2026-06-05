@@ -50,4 +50,9 @@ public class ChartDataBO {
      * 错误信息
      */
     private String errorMessage;
+
+    /**
+     *  enriched DSL（包含 dimName/metricName）
+     */
+    private com.cyan.datametric.client.dto.MetricBiAnalysisCmd dsl;
 }

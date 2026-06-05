@@ -1,6 +1,6 @@
 package com.cyan.datametric.adapter.metric.dimension.category.convert;
 
-import com.cyan.arch.common.mapstruct.MapstructConvert;
+import com.cyan.arch.base.mapstruct.MapstructConvert;
 import com.cyan.datametric.adapter.metric.dimension.category.dto.DimensionCategoryDTO;
 import com.cyan.datametric.application.metric.dimension.category.bo.DimensionCategoryBO;
 import org.mapstruct.Mapper;

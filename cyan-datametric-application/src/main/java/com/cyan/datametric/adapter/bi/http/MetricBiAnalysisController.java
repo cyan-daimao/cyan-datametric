@@ -5,10 +5,15 @@ import com.cyan.datametric.adapter.bi.http.convert.MetricBiAnalysisAdapterConver
 import com.cyan.datametric.adapter.bi.http.dto.BiDimensionDTO;
 import com.cyan.datametric.adapter.bi.http.dto.BiMetricDTO;
 import com.cyan.datametric.adapter.bi.http.dto.DimensionValueDTO;
+import com.cyan.datametric.adapter.bi.http.dto.MetricAssociationGraphDTO;
+import com.cyan.datametric.adapter.bi.http.dto.MetricAssociationSearchDTO;
+import com.cyan.datametric.adapter.bi.http.dto.MetricAssociationSearchRequest;
 import com.cyan.datametric.application.bi.MetricBiAnalysisService;
 import com.cyan.datametric.application.bi.bo.BiDimensionBO;
 import com.cyan.datametric.application.bi.bo.BiMetricBO;
 import com.cyan.datametric.application.bi.bo.DimensionValueBO;
+import com.cyan.datametric.application.bi.bo.MetricAssociationGraphBO;
+import com.cyan.datametric.application.bi.bo.MetricAssociationSearchBO;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 
@@ -68,5 +73,26 @@ public class MetricBiAnalysisController {
                 .map(metricBiAnalysisAdapterConvert::toDimensionValueDTO)
                 .toList();
         return Response.success(dtos);
+    }
+
+    /**
+     * 搜索当前已选指标维度可继续关联的候选对象
+     */
+    @PostMapping("/associations/search")
+    public Response<MetricAssociationSearchDTO> searchAssociations(
+            @RequestBody MetricAssociationSearchRequest request) {
+        MetricAssociationSearchBO bo = metricBiAnalysisService.searchAssociations(
+                metricBiAnalysisAdapterConvert.toMetricAssociationSearchQuery(request));
+        return Response.success(metricBiAnalysisAdapterConvert.toMetricAssociationSearchDTO(bo));
+    }
+
+    /**
+     * 查询单个指标的可关联图谱
+     */
+    @GetMapping("/associations/graph")
+    public Response<MetricAssociationGraphDTO> associationGraph(
+            @RequestParam("metricCode") String metricCode) {
+        MetricAssociationGraphBO bo = metricBiAnalysisService.associationGraph(metricCode);
+        return Response.success(metricBiAnalysisAdapterConvert.toMetricAssociationGraphDTO(bo));
     }
 }

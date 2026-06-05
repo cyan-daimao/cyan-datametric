@@ -3,6 +3,7 @@ package com.cyan.datametric.application.bi;
 import com.cyan.arch.common.api.Assert;
 import com.cyan.arch.common.api.BusinessException;
 import com.cyan.datametric.client.dto.MetricBiAnalysisCmd;
+import com.cyan.datametric.domain.config.BuiltinTimeDimension;
 import com.cyan.datametric.domain.config.Dimension;
 import com.cyan.datametric.domain.config.Modifier;
 import com.cyan.datametric.domain.config.TimePeriod;
@@ -11,6 +12,7 @@ import com.cyan.datametric.domain.metric.MetricAtomicExt;
 import com.cyan.datametric.enums.PeriodType;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
+import org.springframework.util.StringUtils;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -181,9 +183,21 @@ public class MetricSqlBuilder {
             return result;
         }
         for (MetricBiAnalysisCmd.DimensionRef ref : dimRefs) {
+            // 先匹配内置时间维度
+            BuiltinTimeDimension builtin = BuiltinTimeDimension.of(ref.getDimCode());
+            if (builtin != null) {
+                result.add(new DimensionInfo(
+                        ref.getDimCode(),
+                        ref.getAlias() != null && !ref.getAlias().isBlank() ? ref.getAlias() : builtin.getDimName(),
+                        builtin.buildExpr(null),
+                        null
+                ));
+                continue;
+            }
+
             Dimension dimension = dimensionRepository.findByDimCode(ref.getDimCode());
             Assert.notNull(dimension, new BusinessException(MetricBiErrorCode.DIMENSION_NOT_FOUND.getMessage()));
-            String columnName = dimension.getColumnName();
+            String columnName = resolveDimensionExpression(dimension);
             Assert.notBlank(columnName, new BusinessException("维度未配置物理字段: " + dimension.getDimName()));
             // 一期不做维度表 JOIN，维度仅提供 columnName 用于 SELECT/GROUP BY
             // 维度的 tableName 是维度表元数据，不与事实表做一致性校验
@@ -195,6 +209,35 @@ public class MetricSqlBuilder {
             ));
         }
         return result;
+    }
+
+    /**
+     * 解析维度 SQL 表达式
+     */
+    private String resolveDimensionExpression(Dimension dimension) {
+        String sourceType = StringUtils.hasText(dimension.getSourceType()) ? dimension.getSourceType() : "COLUMN";
+        return switch (sourceType) {
+            case "JSON_PATH" -> "JSON_VALUE(properties, '" + escapeSql(resolveJsonPath(dimension)) + "')";
+            case "EXPRESSION" -> dimension.getSourceExpr();
+            default -> dimension.getColumnName();
+        };
+    }
+
+    /**
+     * 解析 JSON Path
+     */
+    private String resolveJsonPath(Dimension dimension) {
+        if (StringUtils.hasText(dimension.getSourceExpr())) {
+            return dimension.getSourceExpr();
+        }
+        return "$.properties." + dimension.getColumnName();
+    }
+
+    /**
+     * SQL 字符串转义
+     */
+    private String escapeSql(String value) {
+        return value == null ? "" : value.replace("'", "''");
     }
 
     /**
@@ -216,7 +259,7 @@ public class MetricSqlBuilder {
                     // 尝试从仓库加载维度信息
                     Dimension dimension = dimensionRepository.findByDimCode(filter.getDimCode());
                     Assert.notNull(dimension, new BusinessException(MetricBiErrorCode.DIMENSION_NOT_FOUND.getMessage()));
-                    dim = new DimensionInfo(filter.getDimCode(), dimension.getDimName(), dimension.getColumnName(), dimension.getDisplayColumn());
+                    dim = new DimensionInfo(filter.getDimCode(), dimension.getDimName(), resolveDimensionExpression(dimension), dimension.getDisplayColumn());
                 }
                 String condition = buildFilterCondition(dim.columnName(), filter.getOperator(), filter.getValues());
                 if (condition != null) {

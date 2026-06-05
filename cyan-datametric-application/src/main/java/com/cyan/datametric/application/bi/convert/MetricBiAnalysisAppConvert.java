@@ -44,6 +44,8 @@ public class MetricBiAnalysisAppConvert {
             bo.setStatFunc(metric.getAtomicExt().getStatFunc() == null ? null : metric.getAtomicExt().getStatFunc().getCode());
         }
         bo.setDescription(metric.getBizCaliber());
+        bo.setSecurityLevel(metric.getSecurityLevel());
+        bo.setStatus(metric.getStatus());
         return bo;
     }
 
@@ -98,12 +100,20 @@ public class MetricBiAnalysisAppConvert {
     public ChartDataBO toChartDataBO(String status, Long costTimeMs,
                                      List<String> columns, List<Map<String, Object>> rows,
                                      String sql, String errorMessage) {
-        return toChartDataBO(status, costTimeMs, columns, rows, sql, null, errorMessage);
+        return toChartDataBO(status, costTimeMs, columns, rows, sql, null, null, errorMessage);
     }
 
     public ChartDataBO toChartDataBO(String status, Long costTimeMs,
                                      List<String> columns, List<Map<String, Object>> rows,
                                      String sql, String chartType, String errorMessage) {
+        return toChartDataBO(status, costTimeMs, columns, rows, sql, chartType, null, errorMessage);
+    }
+
+    public ChartDataBO toChartDataBO(String status, Long costTimeMs,
+                                     List<String> columns, List<Map<String, Object>> rows,
+                                     String sql, String chartType,
+                                     com.cyan.datametric.client.dto.MetricBiAnalysisCmd dsl,
+                                     String errorMessage) {
         return new ChartDataBO()
                 .setStatus(status)
                 .setCostTimeMs(costTimeMs)
@@ -111,6 +121,7 @@ public class MetricBiAnalysisAppConvert {
                 .setRows(rows)
                 .setSql(sql)
                 .setChartType(chartType)
+                .setDsl(dsl)
                 .setErrorMessage(errorMessage);
     }
 }

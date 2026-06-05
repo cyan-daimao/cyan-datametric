@@ -23,12 +23,17 @@ public interface MetricService {
     /**
      * 查询指标详情
      */
-    MetricBO detail(String id);
+    MetricBO detail(String id, String currentUser);
 
     /**
      * 创建原子指标
      */
     MetricBO createAtomic(AtomicMetricCmd cmd);
+
+    /**
+     * 按指标编码幂等创建或更新原子指标
+     */
+    MetricBO upsertAtomicByMetricCode(AtomicMetricCmd cmd);
 
     /**
      * 更新原子指标

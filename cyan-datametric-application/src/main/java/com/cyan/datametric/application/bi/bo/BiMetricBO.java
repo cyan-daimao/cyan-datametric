@@ -62,4 +62,14 @@ public class BiMetricBO {
      * 事实表全名（catalog.schema.table）
      */
     private String tableRef;
+
+    /**
+     * 数据密级: L1/L2/L3/L4
+     */
+    private String securityLevel;
+
+    /**
+     * 指标状态: DRAFT/PUBLISHED/OFFLINE
+     */
+    private com.cyan.datametric.enums.MetricStatus status;
 }

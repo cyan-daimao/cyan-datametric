@@ -2,21 +2,24 @@ package com.cyan.datametric.application.analysis.impl;
 
 import com.cyan.arch.common.api.BusinessException;
 import com.cyan.arch.common.api.Response;
-import com.cyan.datagateway.client.SqlGatewayClient;
 import com.cyan.datagateway.client.cmd.SqlExecuteCmd;
 import com.cyan.datagateway.client.dto.SqlExecuteResultDTO;
 import com.cyan.datametric.application.analysis.BiAnalysisService;
 import com.cyan.datametric.application.bi.bo.ChartDataBO;
 import com.cyan.datametric.application.bi.convert.MetricBiAnalysisAppConvert;
 import com.cyan.datametric.client.dto.MetricBiAnalysisCmd;
+import com.cyan.datametric.domain.config.BuiltinTimeDimension;
 import com.cyan.datametric.domain.config.Dimension;
 import com.cyan.datametric.domain.config.repository.DimensionRepository;
 import com.cyan.datametric.domain.metric.Metric;
 import com.cyan.datametric.domain.metric.MetricAtomicExt;
 import com.cyan.datametric.domain.metric.repository.MetricRepository;
-import com.cyan.dataman.client.table.TableRelationClient;
+import com.cyan.datametric.infra.gateway.SqlGateway;
+import com.cyan.datametric.infra.gateway.TableRelationGateway;
+import com.cyan.dataman.client.table.dto.JoinPathsRequestDTO;
 import com.cyan.dataman.client.table.dto.TableRelationDTO;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.util.CollectionUtils;
@@ -31,14 +34,15 @@ import java.util.stream.Collectors;
  * @author cy.Y
  * @since 1.0.0
  */
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class BiAnalysisServiceImpl implements BiAnalysisService {
 
     private final MetricRepository metricRepository;
     private final DimensionRepository dimensionRepository;
-    private final SqlGatewayClient sqlGatewayClient;
-    private final TableRelationClient tableRelationClient;
+    private final SqlGateway sqlGateway;
+    private final TableRelationGateway tableRelationGateway;
     private final MetricBiAnalysisAppConvert metricBiAnalysisAppConvert;
 
     @Value("${cyan.datametric.default-catalog:iceberg}")
@@ -52,13 +56,15 @@ public class BiAnalysisServiceImpl implements BiAnalysisService {
             SqlExecuteCmd executeCmd = new SqlExecuteCmd()
                     .setSql(sql)
                     .setPassport(executor);
-            Response<SqlExecuteResultDTO> response = sqlGatewayClient.executeStarRocksSql(executeCmd);
+            Response<SqlExecuteResultDTO> response = sqlGateway.executeStarRocksSql(executeCmd);
             SqlExecuteResultDTO result = response.getData();
             long cost = System.currentTimeMillis() - start;
 
             String chartType = cmd.getChartType();
 
             if (result == null) {
+                log.error("指标 BI 分析 SQL 执行结果为空, executor={}, sql={}, responseMessage={}",
+                        executor, sql, response.getMessage());
                 return metricBiAnalysisAppConvert.toChartDataBO(
                         "FAILED", cost, new ArrayList<>(), new ArrayList<>(), sql,
                         chartType, response.getMessage() != null ? response.getMessage() : "执行失败");
@@ -67,11 +73,17 @@ public class BiAnalysisServiceImpl implements BiAnalysisService {
             List<Map<String, Object>> rows = result.getData() != null ? result.getData() : List.of();
             List<String> columns = rows.isEmpty() ? List.of() : new ArrayList<>(rows.get(0).keySet());
 
+            if ("FAILED".equals(result.getStatus())) {
+                log.error("指标 BI 分析 SQL 执行失败, executor={}, sql={}, error={}",
+                        executor, sql, result.getErrorMessage());
+            }
+
             return metricBiAnalysisAppConvert.toChartDataBO(
                     result.getStatus(),
                     result.getCostTimeMs() != null ? result.getCostTimeMs() : cost,
                     columns, rows, sql, chartType, result.getErrorMessage());
         } catch (Exception e) {
+            log.error("指标 BI 分析执行异常, executor={}, chartType={}", executor, cmd.getChartType(), e);
             return metricBiAnalysisAppConvert.toChartDataBO(
                     "FAILED",
                     System.currentTimeMillis() - start,
@@ -136,8 +148,7 @@ public class BiAnalysisServiceImpl implements BiAnalysisService {
             }
             String[] factParts = factTableRef.split("\\.");
             List<String> dimTableRefList = new ArrayList<>(dimTableRefs);
-            List<TableRelationDTO> joins = tableRelationClient.findJoinPaths(
-                    factParts[0], factParts[1], factParts[2], dimTableRefList);
+            List<TableRelationDTO> joins = findJoinPaths(factParts[0], factParts[1], factParts[2], dimTableRefList);
             if (joins == null || joins.isEmpty()) {
                 DimensionInfo firstDim = dimensionInfos.stream()
                         .filter(d -> StringUtils.hasText(d.tableName) && !factTableRef.equals(d.tableName))
@@ -147,6 +158,26 @@ public class BiAnalysisServiceImpl implements BiAnalysisService {
                 throw new BusinessException("维度 '" + dimName + "' 所在表与指标事实表 '" + factTableRef
                         + "' 之间未配置关联关系，请在元数据平台的表详情页配置。");
             }
+
+            // 检查每个维表是否都有对应的 JOIN 路径
+            Set<String> joinedDimTables = new HashSet<>();
+            for (TableRelationDTO join : joins) {
+                String dimTable = join.getTargetCatalog() + "." + join.getTargetSchema() + "." + join.getTargetTable();
+                joinedDimTables.add(dimTable);
+            }
+            for (String dimTableRef : dimTableRefs) {
+                if (!joinedDimTables.contains(dimTableRef)) {
+                    DimensionInfo missingDim = dimensionInfos.stream()
+                            .filter(d -> dimTableRef.equals(d.tableName))
+                            .findFirst()
+                            .orElse(null);
+                    String dimName = missingDim != null ? missingDim.alias : "维度";
+                    throw new BusinessException("维度 '" + dimName + "' 所在表 '" + dimTableRef
+                            + "' 与指标事实表 '" + factTableRef
+                            + "' 之间未配置关联关系，请在元数据平台的表详情页配置。");
+                }
+            }
+
             return buildJoinSql(metricInfos, dimensionInfos, joins, cmd, factTableRef);
         } else {
             return buildMultiFactSql(factGroups, dimensionInfos, cmd);
@@ -213,6 +244,20 @@ public class BiAnalysisServiceImpl implements BiAnalysisService {
 
     private String resolveSelectColumn(DimensionInfo dim) {
         return StringUtils.hasText(dim.displayColumn) ? dim.displayColumn : dim.columnName;
+    }
+
+    private String qualifyDimensionColumn(DimensionInfo dim, String alias) {
+        String col = resolveSelectColumn(dim);
+        if (!StringUtils.hasText(col) || !StringUtils.hasText(alias)) {
+            return col;
+        }
+        if (col.startsWith("`")) {
+            return alias + "." + col;
+        }
+        if (col.matches("[A-Za-z_][A-Za-z0-9_]*")) {
+            return alias + ".`" + col + "`";
+        }
+        return col.replaceAll("\\bdt\\b", alias + ".`dt`");
     }
 
     private String qualifyColumnRef(String expression, String alias) {
@@ -295,9 +340,9 @@ public class BiAnalysisServiceImpl implements BiAnalysisService {
             String col = resolveSelectColumn(dim);
             if (StringUtils.hasText(dim.tableName) && !factTableRef.equals(dim.tableName)) {
                 String alias = getTableAlias(dim.tableName, joins, factTableRef);
-                selectItems.add(alias + "." + col + " AS `" + dim.alias + "`");
+                selectItems.add(qualifyDimensionColumn(dim, alias) + " AS `" + dim.alias + "`");
             } else {
-                selectItems.add(factAlias + "." + col + " AS `" + dim.alias + "`");
+                selectItems.add(qualifyDimensionColumn(dim, factAlias) + " AS `" + dim.alias + "`");
             }
         }
         for (MetricInfo metric : metrics) {
@@ -357,12 +402,12 @@ public class BiAnalysisServiceImpl implements BiAnalysisService {
                 if (StringUtils.hasText(dim.tableName) && !factTableRef.equals(dim.tableName)) {
                     String alias = aliasMap.get(dim.tableName);
                     if (StringUtils.hasText(alias)) {
-                        groupByCols.add(alias + "." + col);
+                        groupByCols.add(qualifyDimensionColumn(dim, alias));
                     } else {
                         groupByCols.add(col);
                     }
                 } else {
-                    groupByCols.add(factAlias + "." + col);
+                    groupByCols.add(qualifyDimensionColumn(dim, factAlias));
                 }
             }
             sql.append(" GROUP BY ").append(String.join(", ", groupByCols));
@@ -477,23 +522,67 @@ public class BiAnalysisServiceImpl implements BiAnalysisService {
         if (!StringUtils.hasText(dimCode)) {
             throw new BusinessException("维度编码不能为空");
         }
+
+        // 先匹配内置时间维度
+        BuiltinTimeDimension builtin = BuiltinTimeDimension.of(dimCode);
+        if (builtin != null) {
+            DimensionInfo info = new DimensionInfo();
+            info.dimCode = dimCode;
+            // 内置维度的 columnName 是完整 SQL 表达式，不加反引号
+            info.columnName = builtin.buildExpr(null);
+            info.alias = StringUtils.hasText(ref.getAlias()) ? ref.getAlias() : builtin.getDimName();
+            info.tableName = null;
+            info.displayColumn = null;
+            return info;
+        }
+
         Dimension dim = dimensionRepository.findByDimCode(dimCode);
         if (dim == null) {
             throw new BusinessException("维度 '" + dimCode + "' 不存在");
         }
-        if (!StringUtils.hasText(dim.getColumnName())) {
+        String columnExpr = resolveDimensionExpression(dim);
+        if (!StringUtils.hasText(columnExpr)) {
             throw new BusinessException("维度 '" + dimCode + "' 未配置关联字段");
         }
 
         DimensionInfo info = new DimensionInfo();
         info.dimCode = dimCode;
-        info.columnName = "`" + dim.getColumnName() + "`";
+        info.columnName = columnExpr;
         if (StringUtils.hasText(dim.getDisplayColumn())) {
             info.displayColumn = "`" + dim.getDisplayColumn() + "`";
         }
         info.alias = StringUtils.hasText(ref.getAlias()) ? ref.getAlias() : dim.getDimName();
         info.tableName = buildDimensionTableRef(dim.getSchemaName(), dim.getTableName());
         return info;
+    }
+
+    /**
+     * 解析维度 SQL 表达式
+     */
+    private String resolveDimensionExpression(Dimension dim) {
+        String sourceType = StringUtils.hasText(dim.getSourceType()) ? dim.getSourceType() : "COLUMN";
+        return switch (sourceType) {
+            case "JSON_PATH" -> "JSON_VALUE(properties, '" + escapeSql(resolveJsonPath(dim)) + "')";
+            case "EXPRESSION" -> dim.getSourceExpr();
+            default -> "`" + dim.getColumnName() + "`";
+        };
+    }
+
+    /**
+     * 解析 JSON Path
+     */
+    private String resolveJsonPath(Dimension dim) {
+        if (StringUtils.hasText(dim.getSourceExpr())) {
+            return dim.getSourceExpr();
+        }
+        return "$.properties." + dim.getColumnName();
+    }
+
+    /**
+     * SQL 字符串转义
+     */
+    private String escapeSql(String value) {
+        return value == null ? "" : value.replace("'", "''");
     }
 
     // ==================== 过滤条件解析 ====================
@@ -600,7 +689,12 @@ public class BiAnalysisServiceImpl implements BiAnalysisService {
                             && (!StringUtils.hasText(factTableRef) || !factTableRef.equals(dim.tableName))) {
                         String alias = aliasMap.get(dim.tableName);
                         if (StringUtils.hasText(alias)) {
-                            col = alias + "." + col;
+                            col = qualifyDimensionColumn(dim, alias);
+                        }
+                    } else if (aliasMap != null && StringUtils.hasText(factTableRef)) {
+                        String factAlias = aliasMap.get(factTableRef);
+                        if (StringUtils.hasText(factAlias)) {
+                            col = qualifyDimensionColumn(dim, factAlias);
                         }
                     }
                     return col;
@@ -663,7 +757,7 @@ public class BiAnalysisServiceImpl implements BiAnalysisService {
                                       List<DimensionInfo> dimensionInfos,
                                       MetricBiAnalysisCmd cmd) {
         for (DimensionInfo dim : dimensionInfos) {
-            if (!StringUtils.hasText(dim.tableName)) {
+            if (!StringUtils.hasText(dim.tableName) && !isSimpleQuotedColumn(dim.columnName)) {
                 throw new BusinessException("多事实表关联分析要求所有维度必须配置关联维度表");
             }
         }
@@ -711,8 +805,7 @@ public class BiAnalysisServiceImpl implements BiAnalysisService {
         List<String> dimTableRefList = new ArrayList<>(dimTableRefs);
         for (FactGroup group : factGroups) {
             String[] parts = group.tableRef.split("\\.");
-            List<TableRelationDTO> relations = tableRelationClient.findJoinPaths(
-                    parts[0], parts[1], parts[2], dimTableRefList);
+            List<TableRelationDTO> relations = findJoinPaths(parts[0], parts[1], parts[2], dimTableRefList);
             if (relations != null) {
                 for (TableRelationDTO rel : relations) {
                     String dimTable = rel.getTargetCatalog() + "." + rel.getTargetSchema() + "." + rel.getTargetTable();
@@ -720,6 +813,43 @@ public class BiAnalysisServiceImpl implements BiAnalysisService {
                     group.dimTargetColumnMap.put(dimTable, rel.getTargetColumn());
                 }
             }
+        }
+    }
+
+    private List<TableRelationDTO> findJoinPaths(String factCatalog, String factSchema, String factTable,
+                                                 List<String> dimTableRefs) {
+        JoinPathsRequestDTO request = new JoinPathsRequestDTO()
+                .setFactTable(new JoinPathsRequestDTO.TableRefDTO(factCatalog, factSchema, factTable))
+                .setDimensionTables(dimTableRefs.stream()
+                        .map(ref -> {
+                            String[] parts = ref.split("\\.");
+                            if (parts.length != 3) {
+                                throw new BusinessException(
+                                        "维度表引用格式错误，期望 catalog.schema.table，实际: " + ref);
+                            }
+                            return new JoinPathsRequestDTO.TableRefDTO(parts[0], parts[1], parts[2]);
+                        })
+                        .toList());
+        try {
+            Response<List<TableRelationDTO>> response = tableRelationGateway.findJoinPaths(request);
+            if (response == null) {
+                log.error("查询 dataman 表关联关系失败, fact={}.{}.{}, dimTables={}, response=null",
+                        factCatalog, factSchema, factTable, dimTableRefs);
+                throw new BusinessException("查询表关联关系失败: dataman 返回为空");
+            }
+            if (response.getData() == null) {
+                log.error("查询 dataman 表关联关系失败, fact={}.{}.{}, dimTables={}, code={}, message={}",
+                        factCatalog, factSchema, factTable, dimTableRefs, response.getCode(), response.getMessage());
+                throw new BusinessException("查询表关联关系失败: "
+                        + (StringUtils.hasText(response.getMessage()) ? response.getMessage() : "dataman 未返回关联数据"));
+            }
+            return response.getData();
+        } catch (BusinessException e) {
+            throw e;
+        } catch (Exception e) {
+            log.error("查询 dataman 表关联关系异常, fact={}.{}.{}, dimTables={}",
+                    factCatalog, factSchema, factTable, dimTableRefs, e);
+            throw new BusinessException("查询表关联关系异常: " + e.getMessage());
         }
     }
 
@@ -741,6 +871,29 @@ public class BiAnalysisServiceImpl implements BiAnalysisService {
         }
     }
 
+    /**
+     * 是否为简单反引号字段
+     */
+    private boolean isSimpleQuotedColumn(String columnName) {
+        return StringUtils.hasText(simpleColumnName(columnName));
+    }
+
+    /**
+     * 解析简单反引号字段名
+     */
+    private String simpleColumnName(String columnName) {
+        if (!StringUtils.hasText(columnName)) {
+            return null;
+        }
+        if (columnName.startsWith("`") && columnName.endsWith("`") && columnName.length() > 2) {
+            return columnName.substring(1, columnName.length() - 1);
+        }
+        if (columnName.matches("[A-Za-z_][A-Za-z0-9_]*")) {
+            return columnName;
+        }
+        return null;
+    }
+
     private String buildFactCteSql(FactGroup group, List<DimensionInfo> dimensionInfos,
                                     MetricBiAnalysisCmd cmd) {
         StringBuilder cte = new StringBuilder();
@@ -751,11 +904,13 @@ public class BiAnalysisServiceImpl implements BiAnalysisService {
 
         for (int i = 0; i < dimensionInfos.size(); i++) {
             DimensionInfo dim = dimensionInfos.get(i);
+            String sourceColumn;
             if (!StringUtils.hasText(dim.tableName)) {
-                continue;
+                sourceColumn = simpleColumnName(dim.columnName);
+            } else {
+                sourceColumn = group.dimKeyMap.get(dim.tableName);
             }
-            String sourceColumn = group.dimKeyMap.get(dim.tableName);
-            if (!StringUtils.hasText(sourceColumn) && group.tableRef.equals(dim.tableName)) {
+            if (StringUtils.hasText(dim.tableName) && !StringUtils.hasText(sourceColumn) && group.tableRef.equals(dim.tableName)) {
                 sourceColumn = dim.columnName.replace("`", "");
             }
             if (!StringUtils.hasText(sourceColumn)) {
@@ -805,6 +960,9 @@ public class BiAnalysisServiceImpl implements BiAnalysisService {
     }
 
     private boolean hasDimKey(FactGroup group, int dimIndex, DimensionInfo dim) {
+        if (!StringUtils.hasText(dim.tableName)) {
+            return isSimpleQuotedColumn(dim.columnName);
+        }
         if (group.tableRef.equals(dim.tableName)) {
             return StringUtils.hasText(dim.columnName);
         }
@@ -889,13 +1047,17 @@ public class BiAnalysisServiceImpl implements BiAnalysisService {
         Map<String, String> dimAliasMap = new HashMap<>();
         int dimAliasIdx = 0;
         for (DimensionInfo dim : dimensionInfos) {
-            String dimAlias = dimAliasMap.get(dim.tableName);
-            if (dimAlias == null) {
-                dimAlias = "d" + dimAliasIdx++;
-                dimAliasMap.put(dim.tableName, dimAlias);
-            }
             String col = resolveSelectColumn(dim);
-            selectItems.add(dimAlias + "." + col + " AS `" + dim.alias + "`");
+            if (StringUtils.hasText(dim.tableName)) {
+                String dimAlias = dimAliasMap.get(dim.tableName);
+                if (dimAlias == null) {
+                    dimAlias = "d" + dimAliasIdx++;
+                    dimAliasMap.put(dim.tableName, dimAlias);
+                }
+                selectItems.add(dimAlias + "." + col + " AS `" + dim.alias + "`");
+            } else {
+                selectItems.add("j.`" + dim.alias + "` AS `" + dim.alias + "`");
+            }
         }
 
         for (FactGroup group : factGroups) {

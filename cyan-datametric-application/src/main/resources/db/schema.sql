@@ -8,6 +8,7 @@ CREATE TABLE IF NOT EXISTS metric_definition (
     biz_caliber TEXT COMMENT '业务口径',
     tech_caliber TEXT COMMENT '技术口径',
     status VARCHAR(32) NOT NULL DEFAULT 'DRAFT' COMMENT '状态: DRAFT/PUBLISHED/OFFLINE',
+    security_level VARCHAR(8) NOT NULL DEFAULT 'L1' COMMENT '数据密级: L1/L2/L3/L4',
     owner VARCHAR(64) COMMENT '负责人',
     version INT NOT NULL DEFAULT 1 COMMENT '版本号',
     create_by VARCHAR(64) COMMENT '创建人',
@@ -18,7 +19,8 @@ CREATE TABLE IF NOT EXISTS metric_definition (
     INDEX idx_metric_name (metric_name),
     INDEX idx_metric_type (metric_type),
     INDEX idx_subject_code (subject_code),
-    INDEX idx_status (status)
+    INDEX idx_status (status),
+    INDEX idx_security_level (security_level)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='指标定义表';
 
 -- 原子指标扩展表
@@ -31,6 +33,7 @@ CREATE TABLE IF NOT EXISTS metric_atomic (
     tbl_name VARCHAR(128) NOT NULL COMMENT '表名称',
     col_name VARCHAR(128) NOT NULL COMMENT '字段名称',
     filter_condition JSON COMMENT '过滤条件JSON',
+    deleted_at DATETIME DEFAULT NULL COMMENT '逻辑删除时间',
     UNIQUE KEY uk_metric_id (metric_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='原子指标扩展表';
 
@@ -43,6 +46,7 @@ CREATE TABLE IF NOT EXISTS metric_derived (
     modifier_ids JSON COMMENT '修饰词ID列表JSON',
     dimension_ids JSON COMMENT '维度ID列表JSON',
     group_by_fields JSON COMMENT '分组字段JSON',
+    deleted_at DATETIME DEFAULT NULL COMMENT '逻辑删除时间',
     UNIQUE KEY uk_metric_id (metric_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='派生指标扩展表';
 
@@ -52,6 +56,7 @@ CREATE TABLE IF NOT EXISTS metric_composite (
     metric_id BIGINT NOT NULL COMMENT '指标定义ID',
     formula TEXT NOT NULL COMMENT '计算公式',
     metric_refs JSON NOT NULL COMMENT '引用的指标ID列表JSON',
+    deleted_at DATETIME DEFAULT NULL COMMENT '逻辑删除时间',
     UNIQUE KEY uk_metric_id (metric_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='复合指标扩展表';
 
@@ -101,6 +106,7 @@ CREATE TABLE IF NOT EXISTS metric_lineage (
     level INT NOT NULL DEFAULT 1 COMMENT '血缘层级',
     create_by VARCHAR(64) COMMENT '创建人',
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    deleted_at DATETIME DEFAULT NULL COMMENT '逻辑删除时间',
     INDEX idx_metric_id (metric_id),
     INDEX idx_parent_metric_id (parent_metric_id),
     INDEX idx_lineage_type (lineage_type)
@@ -118,6 +124,9 @@ CREATE TABLE IF NOT EXISTS metric_dimension (
     table_name VARCHAR(128) COMMENT '关联数仓维表名',
     column_name VARCHAR(128) COMMENT '关联维表字段名',
     display_column VARCHAR(128) COMMENT '显示字段名（BI展示用）',
+    source_type VARCHAR(32) DEFAULT 'COLUMN' COMMENT '来源类型: COLUMN/JSON_PATH/EXPRESSION',
+    source_expr VARCHAR(512) DEFAULT NULL COMMENT '维度取数字段或表达式',
+    source_table VARCHAR(128) DEFAULT NULL COMMENT '来源事实表',
     description VARCHAR(512) COMMENT '描述',
     create_by VARCHAR(64) COMMENT '创建人',
     update_by VARCHAR(64) COMMENT '修改人',
@@ -158,6 +167,7 @@ CREATE TABLE IF NOT EXISTS metric_favorite (
     metric_id BIGINT NOT NULL COMMENT '指标ID',
     user_id VARCHAR(64) NOT NULL COMMENT '用户ID',
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    deleted_at DATETIME DEFAULT NULL COMMENT '逻辑删除时间',
     UNIQUE KEY uk_metric_user (metric_id, user_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='指标收藏表';
 
@@ -215,8 +225,11 @@ INSERT INTO metric_time_period(period_code, period_name, period_type, relative_v
 ('THIS_YEAR', '本年', 'RELATIVE', 0, 'YEAR');
 
 -- 公共维度预置数据
+-- 注意：日/周/月/年/季度/小时/分钟/秒 等时间粒度请优先使用系统内置时间维度
+-- （DIM_DATE_DAY、DIM_DATE_HOUR、DIM_TIME_HOUR 等），无需维护 d_date 维表。
+-- DIM_DATE 保留作为维表方案的向后兼容。
 INSERT INTO metric_dimension(dim_code, dim_name, dim_type, data_type, dim_values, category_id, table_name, column_name, description) VALUES
-('DIM_DATE', '日期', 'DATE', 'DATE', null, (SELECT id FROM metric_dimension_category WHERE name='时间周期'), 'd_date', 'dt', '日期维度，按天统计'),
+('DIM_DATE', '日期', 'DATE', 'DATE', null, (SELECT id FROM metric_dimension_category WHERE name='时间周期'), 'd_date', 'dt', '日期维度，按天统计。推荐使用系统内置维度 DIM_DATE_DAY，无需维表。'),
 ('DIM_PROVINCE', '省份', 'GEO', 'STRING', '["北京","上海","广东","浙江","江苏"]', (SELECT id FROM metric_dimension_category WHERE name='地理位置'), 'd_province', 'province_name', '省级地理维度'),
 ('DIM_CITY', '城市', 'GEO', 'STRING', '["北京","上海","广州","深圳","杭州"]', (SELECT id FROM metric_dimension_category WHERE name='地理位置'), 'd_city', 'city_name', '城市级地理维度'),
 ('DIM_CHANNEL', '渠道', 'ENUM', 'STRING', '["APP","WEB","小程序","H5"]', (SELECT id FROM metric_dimension_category WHERE name='渠道来源'), 'd_channel', 'channel_name', '用户访问渠道'),
@@ -234,12 +247,14 @@ CREATE TABLE IF NOT EXISTS metric_definition_history (
     biz_caliber TEXT COMMENT '业务口径',
     tech_caliber TEXT COMMENT '技术口径',
     status VARCHAR(32) NOT NULL COMMENT '状态',
+    security_level VARCHAR(8) NOT NULL DEFAULT 'L1' COMMENT '数据密级: L1/L2/L3/L4',
     owner VARCHAR(64) COMMENT '负责人',
     version INT NOT NULL COMMENT '快照时的版本号',
     create_by VARCHAR(64) COMMENT '创建人',
     update_by VARCHAR(64) COMMENT '修改人',
     created_at DATETIME COMMENT '创建时间',
     updated_at DATETIME COMMENT '更新时间',
+    deleted_at DATETIME DEFAULT NULL COMMENT '逻辑删除时间',
     ext_json JSON COMMENT '扩展信息快照（原子/派生/复合）',
     snapshot_time DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '快照时间',
     INDEX idx_metric_code (metric_code),

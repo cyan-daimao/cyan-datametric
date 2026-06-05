@@ -79,6 +79,21 @@ public class Dimension {
     private String displayColumn;
 
     /**
+     * 来源类型：COLUMN/JSON_PATH/EXPRESSION
+     */
+    private String sourceType;
+
+    /**
+     * 来源表达式
+     */
+    private String sourceExpr;
+
+    /**
+     * 来源事实表
+     */
+    private String sourceTable;
+
+    /**
      * 描述
      */
     private String description;

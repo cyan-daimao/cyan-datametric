@@ -1,6 +1,9 @@
 package com.cyan.datametric.application.metric.cmd;
 
+import lombok.AllArgsConstructor;
 import lombok.Data;
+import lombok.NoArgsConstructor;
+import lombok.experimental.Accessors;
 
 import java.util.List;
 
@@ -11,6 +14,9 @@ import java.util.List;
  * @since 1.0.0
  */
 @Data
+@AllArgsConstructor
+@NoArgsConstructor
+@Accessors(chain = true)
 public class AtomicMetricCmd {
 
     /**
@@ -67,6 +73,11 @@ public class AtomicMetricCmd {
      * 主题域编码
      */
     private String subjectCode;
+
+    /**
+     * 数据密级
+     */
+    private String securityLevel;
 
     /**
      * 负责人

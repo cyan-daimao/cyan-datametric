@@ -8,6 +8,7 @@ import com.cyan.datametric.application.metric.MetricService;
 import com.cyan.datametric.application.metric.bo.*;
 import com.cyan.datametric.application.metric.cmd.*;
 import com.cyan.datametric.application.metric.convert.MetricAppConvert;
+import com.cyan.datametric.application.metric.lineage.MetricFieldLineageSyncService;
 import com.cyan.datametric.domain.config.Modifier;
 import com.cyan.datametric.domain.config.TimePeriod;
 import com.cyan.datametric.domain.config.repository.ModifierRepository;
@@ -19,12 +20,15 @@ import com.cyan.datametric.domain.metric.query.MetricPageQuery;
 import com.cyan.datametric.domain.metric.repository.MetricFavoriteRepository;
 import com.cyan.datametric.domain.metric.repository.MetricLineageRepository;
 import com.cyan.datametric.domain.metric.repository.MetricRepository;
-import com.cyan.datametric.domain.metric.subject.repository.MetricSubjectRepository;
 import com.cyan.datametric.enums.MetricStatus;
 import com.cyan.datametric.enums.MetricType;
 import com.cyan.datametric.enums.PeriodType;
+import com.cyan.dataauth.dto.UserSecurityLevelDTO;
+import com.cyan.dataauth.enums.SecurityLevel;
+import com.cyan.datametric.infra.gateway.AuthCheckGateway;
 import com.cyan.datametric.infra.util.SnowflakeIdUtil;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -38,6 +42,7 @@ import java.util.stream.Collectors;
  * @author cy.Y
  * @since 1.0.0
  */
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class MetricServiceImpl implements MetricService {
@@ -49,6 +54,8 @@ public class MetricServiceImpl implements MetricService {
     private final TimePeriodRepository timePeriodRepository;
     private final MetricAppConvert metricAppConvert;
     private final MetricBOAssembler metricBOAssembler;
+    private final AuthCheckGateway authCheckGateway;
+    private final MetricFieldLineageSyncService metricFieldLineageSyncService;
 
     @Value("${datametric.default-datasource:cyan_iceberg}")
     private String defaultDatasource;
@@ -65,9 +72,12 @@ public class MetricServiceImpl implements MetricService {
     }
 
     @Override
-    public MetricBO detail(String id) {
+    public MetricBO detail(String id, String currentUser) {
         Metric metric = metricRepository.findById(id);
         Assert.notNull(metric, new BusinessException("指标不存在"));
+        String userMaxLevel = getUserMaxSecurityLevel(currentUser);
+        Assert.isTrue(canAccess(metric.getSecurityLevel(), userMaxLevel),
+                new BusinessException("您没有权限查看该密级的指标"));
         MetricBO bo = metricBOAssembler.assembleDetail(metric);
         metricBOAssembler.fillSubjectName(bo);
         return bo;
@@ -86,7 +96,18 @@ public class MetricServiceImpl implements MetricService {
         }
         metric.setMetricType(MetricType.ATOMIC);
         metric = metric.save(metricRepository);
+        syncMetricFieldLineage(metric);
         return metricBOAssembler.assembleBasic(metric);
+    }
+
+    @Override
+    @Transactional
+    public MetricBO upsertAtomicByMetricCode(AtomicMetricCmd cmd) {
+        Metric existing = metricRepository.findByMetricCode(cmd.getMetricCode());
+        if (existing == null) {
+            return createAtomic(cmd);
+        }
+        return updateAtomic(existing.getId(), cmd);
     }
 
     @Override
@@ -110,7 +131,11 @@ public class MetricServiceImpl implements MetricService {
         metric.setVersion(existing.getStatus() == MetricStatus.PUBLISHED ? existing.getVersion() + 1 : existing.getVersion());
         metric.setCreateBy(existing.getCreateBy());
         metric.setCreatedAt(existing.getCreatedAt());
+        if (metric.getSecurityLevel() == null) {
+            metric.setSecurityLevel(existing.getSecurityLevel());
+        }
         metric = metric.update(metricRepository);
+        syncMetricFieldLineage(metric);
         return metricBOAssembler.assembleBasic(metric);
     }
 
@@ -125,6 +150,7 @@ public class MetricServiceImpl implements MetricService {
         metric.setMetricType(MetricType.DERIVED);
         metric = metric.save(metricRepository);
         buildLineage(metric);
+        syncMetricFieldLineage(metric);
         return metricBOAssembler.assembleBasic(metric);
     }
 
@@ -141,6 +167,9 @@ public class MetricServiceImpl implements MetricService {
         Metric metric = metricAppConvert.toMetric(cmd);
         metric.setId(id);
         metric.setMetricCode(existing.getMetricCode());
+        if (metric.getSecurityLevel() == null) {
+            metric.setSecurityLevel(existing.getSecurityLevel());
+        }
         metric.setMetricType(MetricType.DERIVED);
         metric.setStatus(existing.getStatus() == MetricStatus.PUBLISHED ? MetricStatus.DRAFT : existing.getStatus());
         metric.setVersion(existing.getStatus() == MetricStatus.PUBLISHED ? existing.getVersion() + 1 : existing.getVersion());
@@ -149,6 +178,7 @@ public class MetricServiceImpl implements MetricService {
         metric = metric.update(metricRepository);
         lineageRepository.deleteByMetricId(id);
         buildLineage(metric);
+        syncMetricFieldLineage(metric);
         return metricBOAssembler.assembleBasic(metric);
     }
 
@@ -163,6 +193,7 @@ public class MetricServiceImpl implements MetricService {
         metric.setMetricType(MetricType.COMPOSITE);
         metric = metric.save(metricRepository);
         buildLineage(metric);
+        syncMetricFieldLineage(metric);
         return metricBOAssembler.assembleBasic(metric);
     }
 
@@ -179,6 +210,9 @@ public class MetricServiceImpl implements MetricService {
         Metric metric = metricAppConvert.toMetric(cmd);
         metric.setId(id);
         metric.setMetricCode(existing.getMetricCode());
+        if (metric.getSecurityLevel() == null) {
+            metric.setSecurityLevel(existing.getSecurityLevel());
+        }
         metric.setMetricType(MetricType.COMPOSITE);
         metric.setStatus(existing.getStatus() == MetricStatus.PUBLISHED ? MetricStatus.DRAFT : existing.getStatus());
         metric.setVersion(existing.getStatus() == MetricStatus.PUBLISHED ? existing.getVersion() + 1 : existing.getVersion());
@@ -187,6 +221,7 @@ public class MetricServiceImpl implements MetricService {
         metric = metric.update(metricRepository);
         lineageRepository.deleteByMetricId(id);
         buildLineage(metric);
+        syncMetricFieldLineage(metric);
         return metricBOAssembler.assembleBasic(metric);
     }
 
@@ -199,6 +234,7 @@ public class MetricServiceImpl implements MetricService {
         Assert.isTrue(downstream.isEmpty(), new BusinessException("该指标被下游指标引用，不可删除"));
         metric.delete(metricRepository);
         lineageRepository.deleteByMetricId(id);
+        metricFieldLineageSyncService.clear(id);
     }
 
     @Override
@@ -214,6 +250,7 @@ public class MetricServiceImpl implements MetricService {
         } else {
             throw new BusinessException("不支持的状态变更");
         }
+        syncMetricFieldLineage(metric);
         return metricBOAssembler.assembleBasic(metric);
     }
 
@@ -224,6 +261,7 @@ public class MetricServiceImpl implements MetricService {
 
     @Override
     public Page<MetricBO> dictionaryPage(MetricPageQuery query, String currentUser) {
+        String userMaxLevel = getUserMaxSecurityLevel(currentUser);
         List<String> favoriteIds = favoriteRepository.findFavoriteMetricIds(currentUser);
         com.cyan.arch.common.api.Page<Metric> page;
 
@@ -239,6 +277,8 @@ public class MetricServiceImpl implements MetricService {
 
         Set<String> favSet = new HashSet<>(favoriteIds);
         List<MetricBO> list = page.getData().stream()
+                .filter(m -> m.getStatus() != com.cyan.datametric.enums.MetricStatus.OFFLINE)
+                .filter(m -> canAccess(m.getSecurityLevel(), userMaxLevel))
                 .map(m -> {
                     MetricBO bo = metricBOAssembler.assembleBasic(m);
                     bo.setIsFavorite(favSet.contains(m.getId()));
@@ -350,12 +390,72 @@ public class MetricServiceImpl implements MetricService {
         // 4. 重建血缘
         lineageRepository.deleteByMetricId(metricId);
         buildLineage(history);
+        syncMetricFieldLineage(metricRepository.findById(metricId));
 
         return metricBOAssembler.assembleBasic(metricRepository.findById(metricId));
     }
 
     // ==================== 私有方法 ====================
 
+
+    // ==================== 密级权限 ====================
+
+    /**
+     * 同步字段级指标血缘
+     */
+    private void syncMetricFieldLineage(Metric metric) {
+        if (metric == null) {
+            return;
+        }
+        Metric atomicMetric = null;
+        List<Metric> refMetrics = List.of();
+        if (metric.getMetricType() == MetricType.DERIVED
+                && metric.getDerivedExt() != null
+                && metric.getDerivedExt().getAtomicMetricId() != null) {
+            atomicMetric = metricRepository.findById(metric.getDerivedExt().getAtomicMetricId());
+        }
+        if (metric.getMetricType() == MetricType.COMPOSITE
+                && metric.getCompositeExt() != null
+                && metric.getCompositeExt().getMetricRefs() != null) {
+            refMetrics = metric.getCompositeExt().getMetricRefs().stream()
+                    .map(metricRepository::findById)
+                    .filter(Objects::nonNull)
+                    .toList();
+        }
+        metricFieldLineageSyncService.sync(metric, atomicMetric, refMetrics);
+    }
+
+    /**
+     * 获取用户最高可访问密级，降级为 L1
+     */
+    private String getUserMaxSecurityLevel(String passport) {
+        try {
+            com.cyan.arch.common.api.Response<UserSecurityLevelDTO> resp = authCheckGateway.getUserMaxSecurityLevel(passport);
+            if (resp != null && resp.getData() != null && resp.getData().getMaxSecurityLevel() != null) {
+                return resp.getData().getMaxSecurityLevel();
+            }
+        } catch (Exception e) {
+            log.warn("获取用户密级失败，降级为 L1, passport={}", passport, e);
+        }
+        return "L1";
+    }
+
+    /**
+     * 判断用户是否可以访问目标密级的数据
+     */
+    private boolean canAccess(String metricSecurityLevel, String userMaxLevel) {
+        if (metricSecurityLevel == null || "L1".equalsIgnoreCase(metricSecurityLevel)) {
+            return true;
+        }
+        SecurityLevel userLevel = SecurityLevel.of(userMaxLevel);
+        SecurityLevel metricLevel = SecurityLevel.of(metricSecurityLevel);
+        if (userLevel == null) {
+            return false;
+        }
+        return userLevel.permits(metricLevel);
+    }
+
+    // ==================== 私有方法 ====================
 
     private void checkNameDuplicate(String metricName) {
         Metric existing = metricRepository.findByName(metricName);
