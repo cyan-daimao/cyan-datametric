@@ -12,10 +12,8 @@ import com.cyan.datametric.domain.config.TimePeriod;
 import com.cyan.datametric.domain.metric.MetricAtomicExt;
 import com.cyan.datametric.domain.metric.MetricFieldBinding;
 import com.cyan.datametric.enums.PeriodType;
-import com.cyan.datametric.infra.gateway.MetadataTableGateway;
 import com.cyan.datametric.infra.gateway.TableRelationGateway;
 import com.cyan.dataman.client.table.dto.JoinPathsRequestDTO;
-import com.cyan.dataman.client.table.dto.MetadataColumnDTO;
 import com.cyan.dataman.client.table.dto.TableRelationDTO;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
@@ -45,7 +43,6 @@ public class MetricSqlBuilder {
 
     private final DimensionResolver dimensionResolver;
     private final TableRelationGateway tableRelationGateway;
-    private final MetadataTableGateway metadataTableGateway;
 
     @Value("${cyan.datametric.default-catalog:iceberg}")
     private String defaultCatalog;
@@ -172,13 +169,6 @@ public class MetricSqlBuilder {
                                                        Map<String, Map<String, TableRelationDTO>> joins) {
         List<DimensionBindingPlan> plans = new ArrayList<>();
         for (DimensionFieldBinding binding : dimensionBindings(dimension)) {
-            if (dimension.isBuiltin()) {
-                boolean allHaveDt = factTables.stream().allMatch(table -> tableContainsColumn(table, "dt"));
-                if (allHaveDt) {
-                    plans.add(new DimensionBindingPlan(dimension, binding, null, 0));
-                }
-                continue;
-            }
             String tableRef = binding.tableRef(defaultCatalog);
             int joinCount = 0;
             boolean ok = true;
@@ -353,9 +343,6 @@ public class MetricSqlBuilder {
                                        int firstDimAliasIndex) {
         ResolvedDimension dimension = dimensionPlan.dimension();
         DimensionFieldBinding binding = dimensionPlan.binding();
-        if (dimension.isBuiltin()) {
-            return qualifyExpression(dimension.getSelectExpr(), factAlias);
-        }
         String expr = resolveDimensionExpression(binding, true);
         if (binding.factBinding() || factTable.equals(binding.tableRef(defaultCatalog))) {
             return qualifyExpression(expr, factAlias);
@@ -603,17 +590,6 @@ public class MetricSqlBuilder {
                 .setDimensionTables(List.of(new JoinPathsRequestDTO.TableRefDTO(dimParts[0], dimParts[1], dimParts[2])));
         Response<List<TableRelationDTO>> response = tableRelationGateway.findJoinPaths(request);
         return response == null || response.getData() == null ? null : response.getData().stream().findFirst().orElse(null);
-    }
-
-    private boolean tableContainsColumn(String tableRef, String columnName) {
-        String[] parts = tableRef.split("\\.");
-        List<MetadataColumnDTO> columns = parts.length == 3
-                ? metadataTableGateway.listColumns(parts[0], parts[1], parts[2])
-                : List.of();
-        return columns.stream()
-                .map(MetadataColumnDTO::getCol)
-                .filter(StringUtils::hasText)
-                .anyMatch(columnName::equalsIgnoreCase);
     }
 
     private String qualifyExpression(String expression, String alias) {

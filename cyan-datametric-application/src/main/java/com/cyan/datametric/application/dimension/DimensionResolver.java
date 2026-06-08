@@ -1,7 +1,6 @@
 package com.cyan.datametric.application.dimension;
 
 import com.cyan.arch.common.api.BusinessException;
-import com.cyan.datametric.domain.config.BuiltinTimeDimension;
 import com.cyan.datametric.domain.config.Dimension;
 import com.cyan.datametric.domain.config.DimensionFieldBinding;
 import com.cyan.datametric.domain.config.repository.DimensionFieldBindingRepository;
@@ -38,10 +37,6 @@ public class DimensionResolver {
     public ResolvedDimension resolve(String dimCode) {
         if (!StringUtils.hasText(dimCode)) {
             throw new BusinessException("维度编码不能为空");
-        }
-        BuiltinTimeDimension builtin = BuiltinTimeDimension.of(dimCode);
-        if (builtin != null) {
-            return resolveBuiltin(builtin);
         }
         Dimension dimension = dimensionRepository.findByDimCode(dimCode);
         if (dimension == null) {
@@ -113,30 +108,6 @@ public class DimensionResolver {
             throw new BusinessException("表引用格式错误，期望 schema.table 或 catalog.schema.table，实际: " + tableRef);
         }
         return tableRef;
-    }
-
-    /**
-     * 解析系统内置时间维度
-     */
-    private ResolvedDimension resolveBuiltin(BuiltinTimeDimension builtin) {
-        return new ResolvedDimension()
-                .setDimCode(builtin.name())
-                .setDimName(builtin.getDimName())
-                .setDimensionKind("DERIVED")
-                .setSelectExpr(builtin.buildExpr(null))
-                .setGroupExpr(builtin.buildExpr(null))
-                .setFilterExpr("`dt`")
-                .setColumnName("dt")
-                .setBuiltin(true)
-                .setFieldBindings(List.of(new DimensionFieldBinding()
-                        .setId(builtin.name())
-                        .setDimId(builtin.name())
-                        .setTableRole("FACT")
-                        .setColumnName("dt")
-                        .setSourceType("EXPRESSION")
-                        .setSourceExpr(builtin.buildExpr(null))
-                        .setPrimaryBinding(true)
-                        .setSortOrder(0)));
     }
 
     /**

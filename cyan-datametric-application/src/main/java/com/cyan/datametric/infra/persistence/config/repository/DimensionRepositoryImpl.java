@@ -2,7 +2,6 @@ package com.cyan.datametric.infra.persistence.config.repository;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
-import com.cyan.datametric.domain.config.BuiltinTimeDimension;
 import com.cyan.datametric.domain.config.Dimension;
 import com.cyan.datametric.domain.config.DimensionFieldBinding;
 import com.cyan.datametric.domain.config.query.DimensionPageQuery;
@@ -15,7 +14,6 @@ import com.cyan.datametric.infra.util.SnowflakeIdUtil;
 import io.micrometer.common.util.StringUtils;
 import org.springframework.stereotype.Repository;
 
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
@@ -46,14 +44,7 @@ public class DimensionRepositoryImpl implements DimensionRepository {
         LambdaQueryWrapper<MetricDimensionDO> wrapper = new LambdaQueryWrapper<MetricDimensionDO>()
                 .eq(MetricDimensionDO::getDimCode, dimCode);
         MetricDimensionDO dimensionDO = dimensionMapper.selectOne(wrapper);
-        Dimension dimension = loadBindings(configInfraConvert.toDimension(dimensionDO));
-        if (dimension == null) {
-            BuiltinTimeDimension builtin = BuiltinTimeDimension.of(dimCode);
-            if (builtin != null) {
-                dimension = toBuiltinDimension(builtin);
-            }
-        }
-        return dimension;
+        return loadBindings(configInfraConvert.toDimension(dimensionDO));
     }
 
     @Override
@@ -70,24 +61,9 @@ public class DimensionRepositoryImpl implements DimensionRepository {
         List<Dimension> list = Optional.ofNullable(result.getRecords()).orElse(List.of()).stream()
                 .map(configInfraConvert::toDimension)
                 .map(this::loadBindings)
-                .collect(java.util.stream.Collectors.toCollection(ArrayList::new));
+                .toList();
 
-        // 第一页头部插入内置时间维度（支持 dimName 过滤）
-        int builtinCount = 0;
-        if (query.current() <= 1) {
-            for (BuiltinTimeDimension builtin : BuiltinTimeDimension.listAll()) {
-                if (StringUtils.isNotBlank(query.getDimName())) {
-                    if (builtin.getDimName() == null || !builtin.getDimName().contains(query.getDimName())) {
-                        continue;
-                    }
-                }
-                list.add(0, toBuiltinDimension(builtin));
-                builtinCount++;
-            }
-        }
-
-        long total = result.getTotal() + builtinCount;
-        return new com.cyan.arch.common.api.Page<>(list, result.getCurrent(), result.getSize(), total);
+        return new com.cyan.arch.common.api.Page<>(list, result.getCurrent(), result.getSize(), result.getTotal());
     }
 
     @Override
@@ -118,7 +94,7 @@ public class DimensionRepositoryImpl implements DimensionRepository {
      * 加载维度字段绑定
      */
     private Dimension loadBindings(Dimension dimension) {
-        if (dimension == null || dimension.getId() == null || BuiltinTimeDimension.of(dimension.getDimCode()) != null) {
+        if (dimension == null || dimension.getId() == null) {
             return dimension;
         }
         List<DimensionFieldBinding> bindings = dimensionFieldBindingRepository.findByDimId(dimension.getId());
@@ -170,22 +146,4 @@ public class DimensionRepositoryImpl implements DimensionRepository {
         }
     }
 
-    /**
-     * 将内置时间维度转换为领域对象
-     *
-     * @param builtin 内置时间维度枚举
-     * @return 维度领域对象
-     */
-    private Dimension toBuiltinDimension(BuiltinTimeDimension builtin) {
-        Dimension d = new Dimension();
-        d.setId(builtin.name());
-        d.setDimCode(builtin.name());
-        d.setDimName(builtin.getDimName());
-        d.setDimType("DATE");
-        d.setDimensionKind("DERIVED");
-        d.setDataType("STRING");
-        d.setColumnName(builtin.buildExpr(null));
-        d.setDescription("系统内置时间维度，无需维表");
-        return d;
-    }
 }

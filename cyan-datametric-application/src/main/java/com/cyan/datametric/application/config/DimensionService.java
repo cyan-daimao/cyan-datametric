@@ -6,7 +6,6 @@ import com.cyan.datametric.application.config.bo.DimensionFieldBindingBO;
 import com.cyan.datametric.application.config.cmd.DimensionCmd;
 import com.cyan.datametric.application.config.cmd.DimensionFieldBindingCmd;
 import com.cyan.datametric.application.config.convert.ConfigAppConvert;
-import com.cyan.datametric.domain.config.BuiltinTimeDimension;
 import com.cyan.datametric.domain.config.Dimension;
 import com.cyan.datametric.domain.config.DimensionFieldBinding;
 import com.cyan.datametric.domain.config.query.DimensionPageQuery;
@@ -42,8 +41,6 @@ public class DimensionService {
         if (cmd.getDimCode() == null || cmd.getDimCode().isBlank()) {
             cmd.setDimCode("DIM" + SnowflakeIdUtil.nextId());
         }
-        Assert.isTrue(BuiltinTimeDimension.of(cmd.getDimCode()) == null,
-                new BusinessException("维度编码 '" + cmd.getDimCode() + "' 为系统内置维度，不可创建"));
         Dimension dimension = configAppConvert.toDimension(cmd);
         dimension = dimension.save(dimensionRepository);
         DimensionBO bo = configAppConvert.toDimensionBO(dimension);
@@ -61,8 +58,6 @@ public class DimensionService {
         if (cmd.getDimCode() == null || cmd.getDimCode().isBlank()) {
             cmd.setDimCode("DIM" + SnowflakeIdUtil.nextId());
         }
-        Assert.isTrue(BuiltinTimeDimension.of(cmd.getDimCode()) == null,
-                new BusinessException("维度编码 '" + cmd.getDimCode() + "' 为系统内置维度，不可创建"));
         Dimension existing = dimensionRepository.findByDimCode(cmd.getDimCode());
         if (existing == null) {
             return create(cmd);
@@ -79,15 +74,9 @@ public class DimensionService {
     }
 
     public DimensionBO update(String id, DimensionCmd cmd) {
-        BuiltinTimeDimension builtin = BuiltinTimeDimension.of(id);
-        if (builtin != null) {
-            throw new BusinessException("维度编码 '" + id + "' 为系统内置维度，不可修改");
-        }
+        assertNumericId(id);
         Dimension existing = dimensionRepository.findById(id);
-        Assert.isTrue(BuiltinTimeDimension.of(existing.getDimCode()) == null,
-                new BusinessException("维度编码 '" + existing.getDimCode() + "' 为系统内置维度，不可修改"));
-        Assert.isTrue(BuiltinTimeDimension.of(cmd.getDimCode()) == null,
-                new BusinessException("维度编码 '" + cmd.getDimCode() + "' 为系统内置维度，不可修改"));
+        Assert.notNull(existing, new BusinessException("维度不存在"));
         Dimension dimension = configAppConvert.toDimension(cmd);
         dimension.setId(id);
         dimension.setDimCode(existing.getDimCode());
@@ -98,24 +87,16 @@ public class DimensionService {
     }
 
     public void delete(String id) {
-        BuiltinTimeDimension builtin = BuiltinTimeDimension.of(id);
-        if (builtin != null) {
-            throw new BusinessException("维度编码 '" + id + "' 为系统内置维度，不可删除");
-        }
+        assertNumericId(id);
         Dimension dimension = dimensionRepository.findById(id);
         Assert.notNull(dimension, new BusinessException("维度不存在"));
-        Assert.isTrue(BuiltinTimeDimension.of(dimension.getDimCode()) == null,
-                new BusinessException("维度编码 '" + dimension.getDimCode() + "' 为系统内置维度，不可删除"));
         dimension.delete(dimensionRepository);
     }
 
     public DimensionBO detail(String id) {
-        // 先检查是否是内置维度编码
-        BuiltinTimeDimension builtin = BuiltinTimeDimension.of(id);
-        if (builtin != null) {
-            return toBuiltinDimensionBO(builtin);
-        }
+        assertNumericId(id);
         Dimension dimension = dimensionRepository.findById(id);
+        Assert.notNull(dimension, new BusinessException("维度不存在"));
         DimensionBO bo = configAppConvert.toDimensionBO(dimension);
         assembleCategoryName(bo);
         assembleTableName(bo);
@@ -126,9 +107,6 @@ public class DimensionService {
         Page<Dimension> page = dimensionRepository.page(query);
         List<DimensionBO> list = page.getData().stream()
                 .map(d -> {
-                    if (BuiltinTimeDimension.of(d.getDimCode()) != null) {
-                        return toBuiltinDimensionBO(BuiltinTimeDimension.of(d.getDimCode()));
-                    }
                     DimensionBO bo = configAppConvert.toDimensionBO(d);
                     assembleCategoryName(bo);
                     assembleTableName(bo);
@@ -162,28 +140,12 @@ public class DimensionService {
     }
 
     /**
-     * 将内置时间维度转换为业务对象
-     *
-     * @param builtin 内置时间维度枚举
-     * @return 维度业务对象
-     */
-    private DimensionBO toBuiltinDimensionBO(BuiltinTimeDimension builtin) {
-        DimensionBO bo = new DimensionBO();
-        bo.setId(builtin.name());
-        bo.setDimCode(builtin.name());
-        bo.setDimName(builtin.getDimName());
-        bo.setDimType("DATE");
-        bo.setDimensionKind("DERIVED");
-        bo.setDataType("STRING");
-        bo.setColumnName(builtin.buildExpr(null));
-        bo.setDescription("系统内置时间维度，无需维表");
-        return bo;
-    }
-
-    /**
      * 查询维度字段绑定
      */
     public List<DimensionFieldBindingBO> listFieldBindings(String dimId) {
+        assertNumericId(dimId);
+        Dimension dimension = dimensionRepository.findById(dimId);
+        Assert.notNull(dimension, new BusinessException("维度不存在"));
         return toDimensionFieldBindingBOs(dimensionFieldBindingRepository.findByDimId(dimId));
     }
 
@@ -191,6 +153,7 @@ public class DimensionService {
      * 保存维度字段绑定
      */
     public DimensionFieldBindingBO saveFieldBinding(String dimId, DimensionFieldBindingCmd cmd, String operator) {
+        assertNumericId(dimId);
         Dimension dimension = dimensionRepository.findById(dimId);
         Assert.notNull(dimension, new BusinessException("维度不存在"));
         DimensionFieldBinding binding = configAppConvert.toDimensionFieldBinding(cmd);
@@ -210,6 +173,7 @@ public class DimensionService {
      * 删除维度字段绑定
      */
     public void deleteFieldBinding(String dimId, String bindingId) {
+        assertNumericId(dimId);
         DimensionFieldBinding binding = dimensionFieldBindingRepository.findById(bindingId);
         Assert.notNull(binding, new BusinessException("维度字段绑定不存在"));
         Assert.isTrue(dimId.equals(binding.getDimId()), new BusinessException("维度字段绑定不属于当前维度"));
@@ -220,6 +184,7 @@ public class DimensionService {
      * 设置主维度字段绑定
      */
     public void setPrimaryFieldBinding(String dimId, String bindingId) {
+        assertNumericId(dimId);
         DimensionFieldBinding binding = dimensionFieldBindingRepository.findById(bindingId);
         Assert.notNull(binding, new BusinessException("维度字段绑定不存在"));
         Assert.isTrue(dimId.equals(binding.getDimId()), new BusinessException("维度字段绑定不属于当前维度"));
@@ -248,5 +213,13 @@ public class DimensionService {
                 .setPrimaryBinding(binding.getPrimaryBinding())
                 .setSortOrder(binding.getSortOrder())
                 .setUpdatedAt(binding.getUpdatedAt());
+    }
+
+    /**
+     * 校验维度ID格式
+     */
+    private void assertNumericId(String id) {
+        Assert.isTrue(id != null && !id.isBlank() && id.chars().allMatch(Character::isDigit),
+                new BusinessException("维度不存在"));
     }
 }

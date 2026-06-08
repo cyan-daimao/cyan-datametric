@@ -29,7 +29,6 @@ import com.cyan.datametric.application.bi.query.MetricAssociationSearchQuery;
 import com.cyan.datametric.application.dimension.DimensionResolver;
 import com.cyan.datametric.application.dimension.ResolvedDimension;
 import com.cyan.datametric.client.dto.MetricBiAnalysisCmd;
-import com.cyan.datametric.domain.config.BuiltinTimeDimension;
 import com.cyan.datametric.domain.config.Dimension;
 import com.cyan.datametric.domain.config.query.DimensionPageQuery;
 import com.cyan.datametric.domain.config.repository.DimensionRepository;
@@ -41,11 +40,9 @@ import com.cyan.datametric.domain.metric.repository.MetricRepository;
 import com.cyan.datametric.domain.metric.subject.MetricSubject;
 import com.cyan.datametric.domain.metric.subject.repository.MetricSubjectRepository;
 import com.cyan.datametric.infra.gateway.AuthCheckGateway;
-import com.cyan.datametric.infra.gateway.MetadataTableGateway;
 import com.cyan.datametric.infra.gateway.SqlGateway;
 import com.cyan.datametric.infra.gateway.TableRelationGateway;
 import com.cyan.dataman.client.table.dto.JoinPathsRequestDTO;
-import com.cyan.dataman.client.table.dto.MetadataColumnDTO;
 import com.cyan.dataman.client.table.dto.TableRelationDTO;
 import com.cyan.employee.client.dto.EmployeeDTO;
 import com.cyan.employee.login.filter.UserContextHolder;
@@ -88,7 +85,6 @@ public class MetricBiAnalysisServiceImpl implements MetricBiAnalysisService {
     private final AuthMetricClient authMetricClient;
     private final AuthCheckGateway authCheckGateway;
     private final TableRelationGateway tableRelationGateway;
-    private final MetadataTableGateway metadataTableGateway;
 
     @Value("${cyan.datametric.default-catalog:iceberg}")
     private String defaultCatalog;
@@ -243,42 +239,20 @@ public class MetricBiAnalysisServiceImpl implements MetricBiAnalysisService {
 
         List<BiDimensionBO> allDimensions = page.getData().stream()
                 .map(d -> metricBiAnalysisAppConvert.toBiDimensionBO(d, categoryNameMap.get(d.getCategoryId())))
-                .filter(d -> {
-                    // name 参数对内置时间维度也生效（Repository 层未对插入的内置维度做过滤）
-                    if (StringUtils.hasText(name) && d != null) {
-                        return d.getDimName() != null && d.getDimName().contains(name);
-                    }
-                    return true;
-                })
                 .toList();
 
-        // 分离内置时间维度（不参与 dataauth 权限过滤）
-        List<BiDimensionBO> builtinDimensions = new ArrayList<>();
-        List<BiDimensionBO> dbDimensions = new ArrayList<>();
-        for (BiDimensionBO d : allDimensions) {
-            if (d != null && BuiltinTimeDimension.of(d.getDimCode()) != null) {
-                builtinDimensions.add(d);
-            } else {
-                dbDimensions.add(d);
-            }
-        }
-
-        // 调用 dataauth 过滤无 VIEW 权限的数据库维度
+        // 调用 dataauth 过滤无 VIEW 权限的维度
         String passport = getCurrentPassport();
         if (passport == null) {
             log.warn("listDimensions 无法获取当前用户上下文，跳过权限过滤");
-            List<BiDimensionBO> result = new ArrayList<>(dbDimensions);
-            result.addAll(builtinDimensions);
-            return result;
+            return allDimensions;
         }
 
         Response<List<MetricResourceDTO>> permittedResp =
                 authMetricClient.listMetrics(passport, "DIMENSION", null, null);
         if (permittedResp == null || permittedResp.getData() == null) {
             log.warn("listDimensions 获取权限列表失败，降级返回全量维度");
-            List<BiDimensionBO> result = new ArrayList<>(dbDimensions);
-            result.addAll(builtinDimensions);
-            return result;
+            return allDimensions;
         }
 
         List<String> permittedCodes = permittedResp.getData().stream()
@@ -286,18 +260,14 @@ public class MetricBiAnalysisServiceImpl implements MetricBiAnalysisService {
                 .filter(Objects::nonNull)
                 .toList();
         if (permittedCodes.isEmpty()) {
-            // 有权限接口但无任何权限，降级返回全量维度（不局限于内置维度）
-            List<BiDimensionBO> result = new ArrayList<>(dbDimensions);
-            result.addAll(builtinDimensions);
-            return result;
+            // 有权限接口但无任何权限，降级返回全量维度
+            return allDimensions;
         }
 
         Set<String> permittedSet = new HashSet<>(permittedCodes);
-        List<BiDimensionBO> result = dbDimensions.stream()
+        return allDimensions.stream()
                 .filter(d -> d.getDimCode() != null && permittedSet.contains(d.getDimCode()))
-                .collect(java.util.stream.Collectors.toCollection(ArrayList::new));
-        result.addAll(builtinDimensions);
-        return result;
+                .toList();
     }
 
     @Override
@@ -586,10 +556,6 @@ public class MetricBiAnalysisServiceImpl implements MetricBiAnalysisService {
     private AssociationRelation relationBetweenMetricAndDimension(MetricContext metric,
                                                                   DimensionContext dimension,
                                                                   Map<String, AssociationRelation> relationCache) {
-        if (dimension.builtin()) {
-            return builtinTimeRelation(metric, dimension, relationCache);
-        }
-
         if (StringUtils.hasText(dimension.sourceTableRef())) {
             boolean allMatched = metric.tableRefs().stream().allMatch(dimension.sourceTableRef()::equals);
             return allMatched
@@ -631,62 +597,6 @@ public class MetricBiAnalysisServiceImpl implements MetricBiAnalysisService {
         return AssociationRelation.associated("PLANNED", primaryTableRef(metric),
                 StringUtils.hasText(dimension.tableRef()) ? dimension.tableRef() : dimension.sourceTableRef(),
                 null, dimension.columnName(), null, "存在可执行的字段绑定规划");
-    }
-
-    /**
-     * 判定内置时间维度是否可用于指标事实表。
-     */
-    private AssociationRelation builtinTimeRelation(MetricContext metric,
-                                                    DimensionContext dimension,
-                                                    Map<String, AssociationRelation> relationCache) {
-        boolean allTablesHaveDt = metric.tableRefs().stream()
-                .allMatch(tableRef -> factTableContainsColumn(tableRef, dimension.columnName(), relationCache));
-        if (!allTablesHaveDt) {
-            return AssociationRelation.notAssociated();
-        }
-        return AssociationRelation.associated("BUILTIN_TIME", primaryTableRef(metric), null,
-                dimension.columnName(), null, null,
-                "事实表存在 " + dimension.columnName() + " 字段，可使用内置时间维度");
-    }
-
-    /**
-     * 判断事实表是否包含指定字段。
-     */
-    private boolean factTableContainsColumn(String tableRef,
-                                            String columnName,
-                                            Map<String, AssociationRelation> relationCache) {
-        if (!StringUtils.hasText(tableRef) || !StringUtils.hasText(columnName)) {
-            return false;
-        }
-        String cacheKey = "COLUMN_EXISTS:" + tableRef + ":" + columnName;
-        if (relationCache.containsKey(cacheKey)) {
-            return relationCache.get(cacheKey).associated();
-        }
-        List<MetadataColumnDTO> columns = listMetadataColumns(tableRef);
-        boolean exists = columns.stream()
-                .map(MetadataColumnDTO::getCol)
-                .filter(StringUtils::hasText)
-                .anyMatch(columnName::equalsIgnoreCase);
-        AssociationRelation relation = exists
-                ? AssociationRelation.associated("COLUMN_EXISTS", tableRef, null,
-                columnName, null, null, "元数据表字段存在")
-                : AssociationRelation.notAssociated();
-        relationCache.put(cacheKey, relation);
-        return exists;
-    }
-
-    /**
-     * 根据表引用查询元数据字段列表。
-     */
-    private List<MetadataColumnDTO> listMetadataColumns(String tableRef) {
-        String[] parts = tableRef.split("\\.");
-        if (parts.length == 3) {
-            return metadataTableGateway.listColumns(parts[0], parts[1], parts[2]);
-        }
-        if (parts.length == 2) {
-            return metadataTableGateway.listColumns(defaultCatalog, parts[0], parts[1]);
-        }
-        return metadataTableGateway.listColumns(null, null, tableRef);
     }
 
     private AssociationRelation queryJoinRelation(String factTableRef,
@@ -782,10 +692,6 @@ public class MetricBiAnalysisServiceImpl implements MetricBiAnalysisService {
     private DimensionContext resolveDimensionContextByCode(String dimCode) {
         if (!StringUtils.hasText(dimCode)) {
             return null;
-        }
-        BuiltinTimeDimension builtin = BuiltinTimeDimension.of(dimCode);
-        if (builtin != null) {
-            return new DimensionContext(dimCode, builtin.getDimName(), null, "dt", null, null, "DERIVED", true);
         }
         ResolvedDimension dimension;
         try {
