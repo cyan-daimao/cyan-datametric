@@ -29,6 +29,11 @@ public class DimensionCmd {
     private String dimType;
 
     /**
+     * 维度实现类型：NORMAL/DEGENERATE/HIERARCHY/DERIVED
+     */
+    private String dimensionKind;
+
+    /**
      * 数据类型
      */
     private String dataType;
@@ -77,6 +82,31 @@ public class DimensionCmd {
      * 来源事实表
      */
     private String sourceTable;
+
+    /**
+     * 层级编码
+     */
+    private String hierarchyCode;
+
+    /**
+     * 层级名称
+     */
+    private String hierarchyName;
+
+    /**
+     * 父级维度编码
+     */
+    private String parentDimCode;
+
+    /**
+     * 层级级别
+     */
+    private Integer hierarchyLevel;
+
+    /**
+     * 排序号
+     */
+    private Integer sortOrder;
 
     /**
      * 描述

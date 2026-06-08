@@ -6,12 +6,12 @@ import com.cyan.datagateway.client.cmd.SqlExecuteCmd;
 import com.cyan.datagateway.client.dto.SqlExecuteResultDTO;
 import com.cyan.datametric.application.analysis.BiAnalysisService;
 import com.cyan.datametric.application.audience.MetricAudienceSelectionService;
+import com.cyan.datametric.application.dimension.DimensionResolver;
+import com.cyan.datametric.application.dimension.ResolvedDimension;
 import com.cyan.datametric.client.audience.dto.MetricAudienceEstimateDTO;
 import com.cyan.datametric.client.audience.dto.MetricAudienceSelectionSqlDTO;
 import com.cyan.datametric.client.audience.request.MetricAudienceSelectionCmd;
 import com.cyan.datametric.client.dto.MetricBiAnalysisCmd;
-import com.cyan.datametric.domain.config.Dimension;
-import com.cyan.datametric.domain.config.repository.DimensionRepository;
 import com.cyan.datametric.infra.gateway.SqlGateway;
 import com.cyan.datametric.infra.gateway.TableRelationGateway;
 import com.cyan.dataman.client.table.dto.JoinPathsRequestDTO;
@@ -46,7 +46,7 @@ public class MetricAudienceSelectionServiceImpl implements MetricAudienceSelecti
     private static final String ENTITY_ID_ALIAS = "entity_id";
 
     private final BiAnalysisService biAnalysisService;
-    private final DimensionRepository dimensionRepository;
+    private final DimensionResolver dimensionResolver;
     private final SqlGateway sqlGateway;
     private final TableRelationGateway tableRelationGateway;
 
@@ -401,62 +401,25 @@ public class MetricAudienceSelectionServiceImpl implements MetricAudienceSelecti
     }
 
     /**
-     * 解析维度表达式
-     */
-    private String resolveDimensionExpression(Dimension dimension) {
-        String sourceType = StringUtils.hasText(dimension.getSourceType()) ? dimension.getSourceType() : "COLUMN";
-        return switch (sourceType) {
-            case "JSON_PATH" -> "JSON_VALUE(properties, '" + escapeValue(resolveJsonPath(dimension)) + "')";
-            case "EXPRESSION" -> {
-                if (!StringUtils.hasText(dimension.getSourceExpr())) {
-                    throw new BusinessException("表达式维度未配置SQL表达式: " + dimension.getDimCode());
-                }
-                yield dimension.getSourceExpr();
-            }
-            default -> {
-                if (!StringUtils.hasText(dimension.getColumnName())) {
-                    throw new BusinessException("字段维度未配置物理字段: " + dimension.getDimCode());
-                }
-                yield "`" + escapeIdentifier(dimension.getColumnName()) + "`";
-            }
-        };
-    }
-
-    /**
-     * 解析 JSON Path
-     */
-    private String resolveJsonPath(Dimension dimension) {
-        if (StringUtils.hasText(dimension.getSourceExpr())) {
-            return dimension.getSourceExpr();
-        }
-        return "$.properties." + dimension.getColumnName();
-    }
-
-    /**
      * 解析维度SQL信息
      */
     private DimensionSqlInfo resolveDimension(String dimCode) {
         if (!StringUtils.hasText(dimCode)) {
             throw new BusinessException("维度编码不能为空");
         }
-        Dimension dimension = dimensionRepository.findByDimCode(dimCode);
-        if (dimension == null) {
-            throw new BusinessException("维度不存在: " + dimCode);
-        }
-        String expression = resolveDimensionExpression(dimension);
+        ResolvedDimension dimension = dimensionResolver.resolve(dimCode);
+        String expression = dimension.getFilterExpr();
         if (!StringUtils.hasText(expression)) {
             throw new BusinessException("维度未配置物理字段: " + dimCode);
         }
-        String tableRef = StringUtils.hasText(dimension.getTableName())
-                ? buildDimensionTableRef(dimension.getSchemaName(), dimension.getTableName())
-                : null;
+        String tableRef = dimension.getTableRef();
         return new DimensionSqlInfo(dimension, tableRef, expression);
     }
 
     /**
      * 解析物理字段名
      */
-    private String resolvePhysicalColumn(Dimension dimension) {
+    private String resolvePhysicalColumn(ResolvedDimension dimension) {
         return StringUtils.hasText(dimension.getColumnName()) ? dimension.getColumnName() : dimension.getDimCode();
     }
 
@@ -564,7 +527,7 @@ public class MetricAudienceSelectionServiceImpl implements MetricAudienceSelecti
     private static class DimensionSqlInfo {
 
         /** 维度领域对象 */
-        private final Dimension dimension;
+        private final ResolvedDimension dimension;
         /** 维度表引用 */
         private final String tableRef;
         /** 维度SQL表达式 */
@@ -577,7 +540,7 @@ public class MetricAudienceSelectionServiceImpl implements MetricAudienceSelecti
          * @param tableRef 维度表引用
          * @param expression 维度SQL表达式
          */
-        private DimensionSqlInfo(Dimension dimension, String tableRef, String expression) {
+        private DimensionSqlInfo(ResolvedDimension dimension, String tableRef, String expression) {
             this.dimension = dimension;
             this.tableRef = tableRef;
             this.expression = expression;

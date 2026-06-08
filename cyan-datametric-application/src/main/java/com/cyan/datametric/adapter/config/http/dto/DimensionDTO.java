@@ -20,6 +20,7 @@ public class DimensionDTO {
     private String dimCode;
     private String dimName;
     private String dimType;
+    private String dimensionKind;
     private String dataType;
     private List<String> dimValues;
     private String categoryId;
@@ -31,6 +32,11 @@ public class DimensionDTO {
     private String sourceType;
     private String sourceExpr;
     private String sourceTable;
+    private String hierarchyCode;
+    private String hierarchyName;
+    private String parentDimCode;
+    private Integer hierarchyLevel;
+    private Integer sortOrder;
     private String description;
     private LocalDateTime updatedAt;
 }

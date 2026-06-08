@@ -7,10 +7,9 @@ import com.cyan.datagateway.client.dto.SqlExecuteResultDTO;
 import com.cyan.datametric.application.analysis.BiAnalysisService;
 import com.cyan.datametric.application.bi.bo.ChartDataBO;
 import com.cyan.datametric.application.bi.convert.MetricBiAnalysisAppConvert;
+import com.cyan.datametric.application.dimension.DimensionResolver;
+import com.cyan.datametric.application.dimension.ResolvedDimension;
 import com.cyan.datametric.client.dto.MetricBiAnalysisCmd;
-import com.cyan.datametric.domain.config.BuiltinTimeDimension;
-import com.cyan.datametric.domain.config.Dimension;
-import com.cyan.datametric.domain.config.repository.DimensionRepository;
 import com.cyan.datametric.domain.metric.Metric;
 import com.cyan.datametric.domain.metric.MetricAtomicExt;
 import com.cyan.datametric.domain.metric.repository.MetricRepository;
@@ -40,7 +39,7 @@ import java.util.stream.Collectors;
 public class BiAnalysisServiceImpl implements BiAnalysisService {
 
     private final MetricRepository metricRepository;
-    private final DimensionRepository dimensionRepository;
+    private final DimensionResolver dimensionResolver;
     private final SqlGateway sqlGateway;
     private final TableRelationGateway tableRelationGateway;
     private final MetricBiAnalysisAppConvert metricBiAnalysisAppConvert;
@@ -137,6 +136,7 @@ public class BiAnalysisServiceImpl implements BiAnalysisService {
 
         if (factGroups.size() == 1) {
             String factTableRef = factGroups.keySet().iterator().next();
+            validateLocalDimensions(dimensionInfos, Set.of(factTableRef));
             Set<String> dimTableRefs = new HashSet<>();
             for (DimensionInfo dim : dimensionInfos) {
                 if (StringUtils.hasText(dim.tableName) && !factTableRef.equals(dim.tableName)) {
@@ -180,7 +180,24 @@ public class BiAnalysisServiceImpl implements BiAnalysisService {
 
             return buildJoinSql(metricInfos, dimensionInfos, joins, cmd, factTableRef);
         } else {
+            validateLocalDimensions(dimensionInfos, factGroups.keySet());
             return buildMultiFactSql(factGroups, dimensionInfos, cmd);
+        }
+    }
+
+    /**
+     * 校验事实表本地维度是否能用于当前事实表集合
+     */
+    private void validateLocalDimensions(List<DimensionInfo> dimensionInfos, Set<String> factTableRefs) {
+        for (DimensionInfo dim : dimensionInfos) {
+            if (!StringUtils.hasText(dim.sourceTableRef)) {
+                continue;
+            }
+            boolean allMatched = factTableRefs.stream().allMatch(dim.sourceTableRef::equals);
+            if (!allMatched) {
+                throw new BusinessException("维度 '" + dim.alias + "' 绑定来源事实表 '" + dim.sourceTableRef
+                        + "'，不能用于当前事实表组合: " + String.join(",", factTableRefs));
+            }
         }
     }
 
@@ -189,9 +206,11 @@ public class BiAnalysisServiceImpl implements BiAnalysisService {
             throw new BusinessException("筛选框图表至少需要选择一个维度");
         }
 
-        String tableRef = dimensionInfos.get(0).tableName;
+        String tableRef = StringUtils.hasText(dimensionInfos.get(0).tableName)
+                ? dimensionInfos.get(0).tableName
+                : dimensionInfos.get(0).sourceTableRef;
         if (!StringUtils.hasText(tableRef)) {
-            throw new BusinessException("筛选框维度未配置关联维表");
+            throw new BusinessException("筛选框维度未配置可查询表");
         }
 
         StringBuilder sql = new StringBuilder();
@@ -523,66 +542,21 @@ public class BiAnalysisServiceImpl implements BiAnalysisService {
             throw new BusinessException("维度编码不能为空");
         }
 
-        // 先匹配内置时间维度
-        BuiltinTimeDimension builtin = BuiltinTimeDimension.of(dimCode);
-        if (builtin != null) {
-            DimensionInfo info = new DimensionInfo();
-            info.dimCode = dimCode;
-            // 内置维度的 columnName 是完整 SQL 表达式，不加反引号
-            info.columnName = builtin.buildExpr(null);
-            info.alias = StringUtils.hasText(ref.getAlias()) ? ref.getAlias() : builtin.getDimName();
-            info.tableName = null;
-            info.displayColumn = null;
-            return info;
-        }
-
-        Dimension dim = dimensionRepository.findByDimCode(dimCode);
-        if (dim == null) {
-            throw new BusinessException("维度 '" + dimCode + "' 不存在");
-        }
-        String columnExpr = resolveDimensionExpression(dim);
-        if (!StringUtils.hasText(columnExpr)) {
+        ResolvedDimension dimension = dimensionResolver.resolve(dimCode);
+        if (!StringUtils.hasText(dimension.getSelectExpr())) {
             throw new BusinessException("维度 '" + dimCode + "' 未配置关联字段");
         }
 
         DimensionInfo info = new DimensionInfo();
         info.dimCode = dimCode;
-        info.columnName = columnExpr;
-        if (StringUtils.hasText(dim.getDisplayColumn())) {
-            info.displayColumn = "`" + dim.getDisplayColumn() + "`";
-        }
-        info.alias = StringUtils.hasText(ref.getAlias()) ? ref.getAlias() : dim.getDimName();
-        info.tableName = buildDimensionTableRef(dim.getSchemaName(), dim.getTableName());
+        info.columnName = dimension.getFilterExpr();
+        info.displayColumn = dimension.getSelectExpr();
+        info.alias = StringUtils.hasText(ref.getAlias()) ? ref.getAlias() : dimension.getDimName();
+        info.tableName = dimension.getTableRef();
+        info.sourceTableRef = dimension.getSourceTableRef();
+        info.dimensionKind = dimension.getDimensionKind();
+        info.builtin = dimension.isBuiltin();
         return info;
-    }
-
-    /**
-     * 解析维度 SQL 表达式
-     */
-    private String resolveDimensionExpression(Dimension dim) {
-        String sourceType = StringUtils.hasText(dim.getSourceType()) ? dim.getSourceType() : "COLUMN";
-        return switch (sourceType) {
-            case "JSON_PATH" -> "JSON_VALUE(properties, '" + escapeSql(resolveJsonPath(dim)) + "')";
-            case "EXPRESSION" -> dim.getSourceExpr();
-            default -> "`" + dim.getColumnName() + "`";
-        };
-    }
-
-    /**
-     * 解析 JSON Path
-     */
-    private String resolveJsonPath(Dimension dim) {
-        if (StringUtils.hasText(dim.getSourceExpr())) {
-            return dim.getSourceExpr();
-        }
-        return "$.properties." + dim.getColumnName();
-    }
-
-    /**
-     * SQL 字符串转义
-     */
-    private String escapeSql(String value) {
-        return value == null ? "" : value.replace("'", "''");
     }
 
     // ==================== 过滤条件解析 ====================
@@ -1162,5 +1136,8 @@ public class BiAnalysisServiceImpl implements BiAnalysisService {
         String displayColumn;
         String alias;
         String tableName;
+        String sourceTableRef;
+        String dimensionKind;
+        boolean builtin;
     }
 }

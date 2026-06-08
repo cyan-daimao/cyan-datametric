@@ -77,6 +77,7 @@ public interface ConfigInfraConvert {
         d.setDimCode(dimensionDO.getDimCode());
         d.setDimName(dimensionDO.getDimName());
         d.setDimType(dimensionDO.getDimType());
+        d.setDimensionKind(dimensionDO.getDimensionKind());
         d.setDataType(dimensionDO.getDataType());
         if (dimensionDO.getDimValues() != null && !dimensionDO.getDimValues().isEmpty()) {
             try {
@@ -95,6 +96,11 @@ public interface ConfigInfraConvert {
         d.setSourceType(dimensionDO.getSourceType());
         d.setSourceExpr(dimensionDO.getSourceExpr());
         d.setSourceTable(dimensionDO.getSourceTable());
+        d.setHierarchyCode(dimensionDO.getHierarchyCode());
+        d.setHierarchyName(dimensionDO.getHierarchyName());
+        d.setParentDimCode(dimensionDO.getParentDimCode());
+        d.setHierarchyLevel(dimensionDO.getHierarchyLevel());
+        d.setSortOrder(dimensionDO.getSortOrder());
         d.setDescription(dimensionDO.getDescription());
         d.setCreateBy(dimensionDO.getCreateBy());
         d.setUpdateBy(dimensionDO.getUpdateBy());
@@ -110,6 +116,7 @@ public interface ConfigInfraConvert {
         d.setDimCode(dimension.getDimCode());
         d.setDimName(dimension.getDimName());
         d.setDimType(dimension.getDimType());
+        d.setDimensionKind(dimension.getDimensionKind());
         d.setDataType(dimension.getDataType());
         if (dimension.getDimValues() != null) {
             d.setDimValues(JSON.toJSONString(dimension.getDimValues()));
@@ -122,6 +129,11 @@ public interface ConfigInfraConvert {
         d.setSourceType(dimension.getSourceType());
         d.setSourceExpr(dimension.getSourceExpr());
         d.setSourceTable(dimension.getSourceTable());
+        d.setHierarchyCode(dimension.getHierarchyCode());
+        d.setHierarchyName(dimension.getHierarchyName());
+        d.setParentDimCode(dimension.getParentDimCode());
+        d.setHierarchyLevel(dimension.getHierarchyLevel());
+        d.setSortOrder(dimension.getSortOrder());
         d.setDescription(dimension.getDescription());
         d.setCreateBy(dimension.getCreateBy());
         d.setUpdateBy(dimension.getUpdateBy());

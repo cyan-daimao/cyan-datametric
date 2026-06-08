@@ -2,17 +2,15 @@ package com.cyan.datametric.application.bi;
 
 import com.cyan.arch.common.api.Assert;
 import com.cyan.arch.common.api.BusinessException;
+import com.cyan.datametric.application.dimension.DimensionResolver;
+import com.cyan.datametric.application.dimension.ResolvedDimension;
 import com.cyan.datametric.client.dto.MetricBiAnalysisCmd;
-import com.cyan.datametric.domain.config.BuiltinTimeDimension;
-import com.cyan.datametric.domain.config.Dimension;
 import com.cyan.datametric.domain.config.Modifier;
 import com.cyan.datametric.domain.config.TimePeriod;
-import com.cyan.datametric.domain.config.repository.DimensionRepository;
 import com.cyan.datametric.domain.metric.MetricAtomicExt;
 import com.cyan.datametric.enums.PeriodType;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
-import org.springframework.util.StringUtils;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -29,7 +27,7 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class MetricSqlBuilder {
 
-    private final DimensionRepository dimensionRepository;
+    private final DimensionResolver dimensionResolver;
 
     /**
      * 生成分析SQL
@@ -62,7 +60,7 @@ public class MetricSqlBuilder {
         sql.append(" FROM ").append(tableName);
 
         // WHERE（仅用户过滤条件）
-        List<String> whereConditions = buildWhereConditions(cmd.getFilters(), dimensionInfos);
+        List<String> whereConditions = buildWhereConditions(cmd.getFilters(), dimensionInfos, tableName);
         if (!whereConditions.isEmpty()) {
             sql.append(" WHERE ").append(String.join(" AND ", whereConditions));
         }
@@ -71,7 +69,7 @@ public class MetricSqlBuilder {
         if (!dimensionInfos.isEmpty()) {
             sql.append(" GROUP BY ").append(
                     dimensionInfos.stream()
-                            .map(DimensionInfo::getColumnExpr)
+                            .map(DimensionInfo::groupExpr)
                             .collect(Collectors.joining(", "))
             );
         }
@@ -183,67 +181,40 @@ public class MetricSqlBuilder {
             return result;
         }
         for (MetricBiAnalysisCmd.DimensionRef ref : dimRefs) {
-            // 先匹配内置时间维度
-            BuiltinTimeDimension builtin = BuiltinTimeDimension.of(ref.getDimCode());
-            if (builtin != null) {
-                result.add(new DimensionInfo(
-                        ref.getDimCode(),
-                        ref.getAlias() != null && !ref.getAlias().isBlank() ? ref.getAlias() : builtin.getDimName(),
-                        builtin.buildExpr(null),
-                        null
-                ));
-                continue;
-            }
-
-            Dimension dimension = dimensionRepository.findByDimCode(ref.getDimCode());
-            Assert.notNull(dimension, new BusinessException(MetricBiErrorCode.DIMENSION_NOT_FOUND.getMessage()));
-            String columnName = resolveDimensionExpression(dimension);
-            Assert.notBlank(columnName, new BusinessException("维度未配置物理字段: " + dimension.getDimName()));
-            // 一期不做维度表 JOIN，维度仅提供 columnName 用于 SELECT/GROUP BY
-            // 维度的 tableName 是维度表元数据，不与事实表做一致性校验
+            ResolvedDimension dimension = dimensionResolver.resolve(ref.getDimCode());
+            Assert.notBlank(dimension.getSelectExpr(), new BusinessException("维度未配置物理字段: " + dimension.getDimName()));
+            validateLocalDimensionTable(dimension, tableName);
             result.add(new DimensionInfo(
                     ref.getDimCode(),
                     ref.getAlias() != null && !ref.getAlias().isBlank() ? ref.getAlias() : dimension.getDimName(),
-                    columnName,
-                    dimension.getDisplayColumn()
+                    dimension.getSelectExpr(),
+                    dimension.getGroupExpr(),
+                    dimension.getFilterExpr()
             ));
         }
         return result;
     }
 
     /**
-     * 解析维度 SQL 表达式
+     * 校验事实表本地维度是否能用于当前事实表
      */
-    private String resolveDimensionExpression(Dimension dimension) {
-        String sourceType = StringUtils.hasText(dimension.getSourceType()) ? dimension.getSourceType() : "COLUMN";
-        return switch (sourceType) {
-            case "JSON_PATH" -> "JSON_VALUE(properties, '" + escapeSql(resolveJsonPath(dimension)) + "')";
-            case "EXPRESSION" -> dimension.getSourceExpr();
-            default -> dimension.getColumnName();
-        };
-    }
-
-    /**
-     * 解析 JSON Path
-     */
-    private String resolveJsonPath(Dimension dimension) {
-        if (StringUtils.hasText(dimension.getSourceExpr())) {
-            return dimension.getSourceExpr();
+    private void validateLocalDimensionTable(ResolvedDimension dimension, String factTableName) {
+        if (dimension.getSourceTableRef() == null || dimension.getSourceTableRef().isBlank()) {
+            return;
         }
-        return "$.properties." + dimension.getColumnName();
-    }
-
-    /**
-     * SQL 字符串转义
-     */
-    private String escapeSql(String value) {
-        return value == null ? "" : value.replace("'", "''");
+        String normalizedFactTable = dimensionResolver.normalizeTableRef(factTableName);
+        if (!dimension.getSourceTableRef().equals(normalizedFactTable)) {
+            throw new BusinessException("维度 '" + dimension.getDimName() + "' 绑定来源事实表 '"
+                    + dimension.getSourceTableRef() + "'，不能用于当前事实表 '" + normalizedFactTable + "'");
+        }
     }
 
     /**
      * 构建WHERE条件（仅用户传入的过滤条件）
      */
-    private List<String> buildWhereConditions(List<MetricBiAnalysisCmd.FilterRef> filters, List<DimensionInfo> dimensionInfos) {
+    private List<String> buildWhereConditions(List<MetricBiAnalysisCmd.FilterRef> filters,
+                                              List<DimensionInfo> dimensionInfos,
+                                              String tableName) {
         List<String> conditions = new ArrayList<>();
         if (filters == null) {
             return conditions;
@@ -256,12 +227,12 @@ public class MetricSqlBuilder {
             if (filter.getDimCode() != null && !filter.getDimCode().isBlank()) {
                 DimensionInfo dim = dimMap.get(filter.getDimCode());
                 if (dim == null) {
-                    // 尝试从仓库加载维度信息
-                    Dimension dimension = dimensionRepository.findByDimCode(filter.getDimCode());
-                    Assert.notNull(dimension, new BusinessException(MetricBiErrorCode.DIMENSION_NOT_FOUND.getMessage()));
-                    dim = new DimensionInfo(filter.getDimCode(), dimension.getDimName(), resolveDimensionExpression(dimension), dimension.getDisplayColumn());
+                    ResolvedDimension dimension = dimensionResolver.resolve(filter.getDimCode());
+                    validateLocalDimensionTable(dimension, tableName);
+                    dim = new DimensionInfo(filter.getDimCode(), dimension.getDimName(),
+                            dimension.getSelectExpr(), dimension.getGroupExpr(), dimension.getFilterExpr());
                 }
-                String condition = buildFilterCondition(dim.columnName(), filter.getOperator(), filter.getValues());
+                String condition = buildFilterCondition(dim.filterExpr(), filter.getOperator(), filter.getValues());
                 if (condition != null) {
                     conditions.add(condition);
                 }
@@ -326,7 +297,7 @@ public class MetricSqlBuilder {
             } else if (order.getDimCode() != null && !order.getDimCode().isBlank()) {
                 DimensionInfo dim = dimMap.get(order.getDimCode());
                 if (dim != null) {
-                    expr = dim.getColumnExpr();
+                    expr = dim.groupExpr();
                 }
             }
             if (expr != null) {
@@ -340,9 +311,9 @@ public class MetricSqlBuilder {
     /**
      * 维度信息内部类
      */
-    private record DimensionInfo(String dimId, String alias, String columnName, String displayColumn) {
+    private record DimensionInfo(String dimId, String alias, String selectExpr, String groupExpr, String filterExpr) {
         String getColumnExpr() {
-            return displayColumn != null && !displayColumn.isBlank() ? displayColumn : columnName;
+            return selectExpr;
         }
     }
 }

@@ -35,6 +35,7 @@ public interface ConfigAppConvert {
         d.setDimCode(cmd.getDimCode());
         d.setDimName(cmd.getDimName());
         d.setDimType(cmd.getDimType());
+        d.setDimensionKind(cmd.getDimensionKind());
         d.setDataType(cmd.getDataType());
         d.setDimValues(cmd.getDimValues());
         d.setCategoryId(cmd.getCategoryId());
@@ -45,6 +46,11 @@ public interface ConfigAppConvert {
         d.setSourceType(cmd.getSourceType());
         d.setSourceExpr(cmd.getSourceExpr());
         d.setSourceTable(cmd.getSourceTable());
+        d.setHierarchyCode(cmd.getHierarchyCode());
+        d.setHierarchyName(cmd.getHierarchyName());
+        d.setParentDimCode(cmd.getParentDimCode());
+        d.setHierarchyLevel(cmd.getHierarchyLevel());
+        d.setSortOrder(cmd.getSortOrder());
         d.setDescription(cmd.getDescription());
         d.setCreateBy(cmd.getCreateBy());
         d.setUpdateBy(cmd.getUpdateBy());

@@ -119,6 +119,7 @@ public class DimensionRepositoryImpl implements DimensionRepository {
         d.setDimCode(builtin.name());
         d.setDimName(builtin.getDimName());
         d.setDimType("DATE");
+        d.setDimensionKind("DERIVED");
         d.setDataType("STRING");
         d.setColumnName(builtin.buildExpr(null));
         d.setDescription("系统内置时间维度，无需维表");

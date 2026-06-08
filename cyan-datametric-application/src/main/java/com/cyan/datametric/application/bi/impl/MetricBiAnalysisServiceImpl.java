@@ -27,6 +27,8 @@ import com.cyan.datametric.application.bi.bo.MetricAssociationGraphBO;
 import com.cyan.datametric.application.bi.bo.MetricAssociationSearchBO;
 import com.cyan.datametric.application.bi.convert.MetricBiAnalysisAppConvert;
 import com.cyan.datametric.application.bi.query.MetricAssociationSearchQuery;
+import com.cyan.datametric.application.dimension.DimensionResolver;
+import com.cyan.datametric.application.dimension.ResolvedDimension;
 import com.cyan.datametric.client.dto.MetricBiAnalysisCmd;
 import com.cyan.datametric.domain.config.BuiltinTimeDimension;
 import com.cyan.datametric.domain.config.Dimension;
@@ -80,6 +82,7 @@ public class MetricBiAnalysisServiceImpl implements MetricBiAnalysisService {
     private final MetricSqlBuilder metricSqlBuilder;
     private final MetricRepository metricRepository;
     private final DimensionRepository dimensionRepository;
+    private final DimensionResolver dimensionResolver;
     private final DimensionCategoryRepository dimensionCategoryRepository;
     private final MetricSubjectRepository metricSubjectRepository;
     private final SqlGateway sqlGateway;
@@ -318,21 +321,21 @@ public class MetricBiAnalysisServiceImpl implements MetricBiAnalysisService {
             log.warn("listDimensionValues 无法获取当前用户上下文，跳过权限校验");
         }
 
-        Dimension dimension = dimensionRepository.findByDimCode(dimCode);
-        Assert.notNull(dimension, new BusinessException(MetricBiErrorCode.DIMENSION_NOT_FOUND.getMessage()));
+        ResolvedDimension dimension = dimensionResolver.resolve(dimCode);
+        String tableRef = StringUtils.hasText(dimension.getTableRef())
+                ? dimension.getTableRef()
+                : dimension.getSourceTableRef();
+        String valueExpr = dimension.getFilterExpr();
+        String labelExpr = dimension.getSelectExpr();
 
-        String tableRef = buildDimensionTableRef(dimension.getSchemaName(), dimension.getTableName());
-        String columnName = dimension.getColumnName();
-        String displayColumn = dimension.getDisplayColumn();
-
-        Assert.notBlank(columnName, new BusinessException("维度 '" + dimCode + "' 未配置物理字段"));
-        Assert.notBlank(tableRef, new BusinessException("维度 '" + dimCode + "' 未配置维表"));
+        Assert.notBlank(valueExpr, new BusinessException("维度 '" + dimCode + "' 未配置物理字段或表达式"));
+        Assert.notBlank(tableRef, new BusinessException("维度 '" + dimCode + "' 未配置可查询表"));
 
         String sql;
-        if (StringUtils.hasText(displayColumn) && !displayColumn.equals(columnName)) {
-            sql = "SELECT DISTINCT `" + columnName + "` AS `value`, `" + displayColumn + "` AS `label` FROM " + tableRef + " LIMIT 1000";
+        if (StringUtils.hasText(labelExpr) && !labelExpr.equals(valueExpr)) {
+            sql = "SELECT DISTINCT " + valueExpr + " AS `value`, " + labelExpr + " AS `label` FROM " + tableRef + " LIMIT 1000";
         } else {
-            sql = "SELECT DISTINCT `" + columnName + "` AS `value`, `" + columnName + "` AS `label` FROM " + tableRef + " LIMIT 1000";
+            sql = "SELECT DISTINCT " + valueExpr + " AS `value`, " + valueExpr + " AS `label` FROM " + tableRef + " LIMIT 1000";
         }
 
         SqlExecuteCmd executeCmd = new SqlExecuteCmd()
@@ -759,18 +762,17 @@ public class MetricBiAnalysisServiceImpl implements MetricBiAnalysisService {
         }
         BuiltinTimeDimension builtin = BuiltinTimeDimension.of(dimCode);
         if (builtin != null) {
-            return new DimensionContext(dimCode, builtin.getDimName(), null, "dt", null, null, true);
+            return new DimensionContext(dimCode, builtin.getDimName(), null, "dt", null, null, "DERIVED", true);
         }
-        Dimension dimension = dimensionRepository.findByDimCode(dimCode);
-        if (dimension == null) {
+        ResolvedDimension dimension;
+        try {
+            dimension = dimensionResolver.resolve(dimCode);
+        } catch (BusinessException e) {
             return null;
         }
-        String tableRef = buildDimensionTableRef(dimension.getSchemaName(), dimension.getTableName());
-        String sourceTableRef = StringUtils.hasText(dimension.getSourceTable())
-                ? normalizeTableRef(dimension.getSourceTable())
-                : null;
-        return new DimensionContext(dimension.getDimCode(), dimension.getDimName(), tableRef,
-                dimension.getColumnName(), dimension.getDisplayColumn(), sourceTableRef, false);
+        return new DimensionContext(dimension.getDimCode(), dimension.getDimName(), dimension.getTableRef(),
+                dimension.getColumnName(), dimension.getDisplayColumn(), dimension.getSourceTableRef(),
+                dimension.getDimensionKind(), dimension.isBuiltin());
     }
 
     private Metric loadMetricExt(Metric metric) {
@@ -828,7 +830,7 @@ public class MetricBiAnalysisServiceImpl implements MetricBiAnalysisService {
 
     private record DimensionContext(String dimCode, String dimName, String tableRef,
                                     String columnName, String displayColumn,
-                                    String sourceTableRef, boolean builtin) {
+                                    String sourceTableRef, String dimensionKind, boolean builtin) {
     }
 
     private record AssociationRelation(boolean associated, String relationType, String sourceTable,

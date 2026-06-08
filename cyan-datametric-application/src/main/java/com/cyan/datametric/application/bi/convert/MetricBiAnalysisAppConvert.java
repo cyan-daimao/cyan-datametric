@@ -65,10 +65,17 @@ public class MetricBiAnalysisAppConvert {
         bo.setDimCode(dimension.getDimCode());
         bo.setDimName(dimension.getDimName());
         bo.setDimType(dimension.getDimType());
+        bo.setDimensionKind(dimension.getDimensionKind());
         bo.setDataType(dimension.getDataType());
         bo.setTableName(dimension.getTableName());
+        bo.setSourceTable(dimension.getSourceTable());
         bo.setColumnName(dimension.getColumnName());
         bo.setDisplayColumn(dimension.getDisplayColumn());
+        bo.setHierarchyCode(dimension.getHierarchyCode());
+        bo.setHierarchyName(dimension.getHierarchyName());
+        bo.setParentDimCode(dimension.getParentDimCode());
+        bo.setHierarchyLevel(dimension.getHierarchyLevel());
+        bo.setSortOrder(dimension.getSortOrder());
         bo.setCategoryName(categoryName);
         return bo;
     }

@@ -118,6 +118,7 @@ CREATE TABLE IF NOT EXISTS metric_dimension (
     dim_code VARCHAR(64) NOT NULL UNIQUE COMMENT '维度编码',
     dim_name VARCHAR(128) NOT NULL COMMENT '维度名称',
     dim_type VARCHAR(50) COMMENT '维度类型: ENUM/STRING/DATE/NUMBER/GEO',
+    dimension_kind VARCHAR(32) NOT NULL DEFAULT 'NORMAL' COMMENT '维度实现类型: NORMAL/DEGENERATE/HIERARCHY/DERIVED',
     data_type VARCHAR(50) COMMENT '数据类型: STRING/INT/BIGINT/DECIMAL/DATE/DATETIME',
     dim_values JSON COMMENT '维度可选值（枚举维度时填写）',
     category_id BIGINT COMMENT '维度分类ID',
@@ -127,6 +128,11 @@ CREATE TABLE IF NOT EXISTS metric_dimension (
     source_type VARCHAR(32) DEFAULT 'COLUMN' COMMENT '来源类型: COLUMN/JSON_PATH/EXPRESSION',
     source_expr VARCHAR(512) DEFAULT NULL COMMENT '维度取数字段或表达式',
     source_table VARCHAR(128) DEFAULT NULL COMMENT '来源事实表',
+    hierarchy_code VARCHAR(64) DEFAULT NULL COMMENT '层级编码',
+    hierarchy_name VARCHAR(128) DEFAULT NULL COMMENT '层级名称',
+    parent_dim_code VARCHAR(64) DEFAULT NULL COMMENT '父级维度编码',
+    hierarchy_level INT DEFAULT NULL COMMENT '层级级别',
+    sort_order INT DEFAULT 0 COMMENT '排序号',
     description VARCHAR(512) COMMENT '描述',
     create_by VARCHAR(64) COMMENT '创建人',
     update_by VARCHAR(64) COMMENT '修改人',
@@ -134,7 +140,9 @@ CREATE TABLE IF NOT EXISTS metric_dimension (
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
     deleted_at DATETIME DEFAULT NULL COMMENT '逻辑删除时间',
     INDEX idx_dim_name (dim_name),
-    INDEX idx_category_id (category_id)
+    INDEX idx_category_id (category_id),
+    INDEX idx_dimension_kind (dimension_kind),
+    INDEX idx_hierarchy_code (hierarchy_code)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='公共维度表';
 
 -- 维度分类表

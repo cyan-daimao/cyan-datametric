@@ -168,6 +168,7 @@ public class DimensionService {
         bo.setDimCode(builtin.name());
         bo.setDimName(builtin.getDimName());
         bo.setDimType("DATE");
+        bo.setDimensionKind("DERIVED");
         bo.setDataType("STRING");
         bo.setColumnName(builtin.buildExpr(null));
         bo.setDescription("系统内置时间维度，无需维表");

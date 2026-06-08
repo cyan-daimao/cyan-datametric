@@ -31,6 +31,7 @@ public interface CollectionMappingAppConvert {
         result.setDimCode(defaultString(cmd.getDimCode(), "dim_" + cmd.getPropertyCode()));
         result.setDimName(defaultString(cmd.getDimName(), cmd.getPropertyName()));
         result.setDimType(defaultString(cmd.getDimType(), "STRING"));
+        result.setDimensionKind("DEGENERATE");
         result.setDataType(defaultString(cmd.getDataType(), "STRING"));
         result.setDimValues(cmd.getDimValues());
         result.setCategoryId(resolveNumericCategoryId(cmd.getCategoryId()));

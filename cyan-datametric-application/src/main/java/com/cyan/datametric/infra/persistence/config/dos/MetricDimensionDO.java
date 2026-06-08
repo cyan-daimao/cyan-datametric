@@ -50,6 +50,12 @@ public class MetricDimensionDO {
     private String dimType;
 
     /**
+     * 维度实现类型
+     */
+    @TableField("dimension_kind")
+    private String dimensionKind;
+
+    /**
      * 数据类型
      */
     @TableField("data_type")
@@ -108,6 +114,36 @@ public class MetricDimensionDO {
      */
     @TableField("source_table")
     private String sourceTable;
+
+    /**
+     * 层级编码
+     */
+    @TableField("hierarchy_code")
+    private String hierarchyCode;
+
+    /**
+     * 层级名称
+     */
+    @TableField("hierarchy_name")
+    private String hierarchyName;
+
+    /**
+     * 父级维度编码
+     */
+    @TableField("parent_dim_code")
+    private String parentDimCode;
+
+    /**
+     * 层级级别
+     */
+    @TableField("hierarchy_level")
+    private Integer hierarchyLevel;
+
+    /**
+     * 排序号
+     */
+    @TableField("sort_order")
+    private Integer sortOrder;
 
     /**
      * 描述
