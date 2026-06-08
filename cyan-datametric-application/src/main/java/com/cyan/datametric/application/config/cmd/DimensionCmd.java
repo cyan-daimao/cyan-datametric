@@ -50,38 +50,64 @@ public class DimensionCmd {
 
     /**
      * 数仓维表所在 schema
+     *
+     * @deprecated 请使用 fieldBindings。
      */
+    @Deprecated
     private String schemaName;
 
     /**
      * 关联数仓维表名
+     *
+     * @deprecated 请使用 fieldBindings。
      */
+    @Deprecated
     private String tableName;
 
     /**
      * 关联维表字段名
+     *
+     * @deprecated 请使用 fieldBindings。
      */
+    @Deprecated
     private String columnName;
 
     /**
      * 显示字段名（BI展示用）
+     *
+     * @deprecated 请使用 fieldBindings。
      */
+    @Deprecated
     private String displayColumn;
 
     /**
      * 来源类型：COLUMN/JSON_PATH/EXPRESSION
+     *
+     * @deprecated 请使用 fieldBindings。
      */
+    @Deprecated
     private String sourceType;
 
     /**
      * 来源表达式
+     *
+     * @deprecated 请使用 fieldBindings。
      */
+    @Deprecated
     private String sourceExpr;
 
     /**
      * 来源事实表
+     *
+     * @deprecated 请使用 fieldBindings。
      */
+    @Deprecated
     private String sourceTable;
+
+    /**
+     * 维度字段绑定列表
+     */
+    private List<DimensionFieldBindingCmd> fieldBindings;
 
     /**
      * 层级编码

@@ -3,6 +3,7 @@ package com.cyan.datametric.application.bi;
 import com.cyan.datametric.domain.config.Modifier;
 import com.cyan.datametric.domain.config.TimePeriod;
 import com.cyan.datametric.domain.metric.MetricAtomicExt;
+import com.cyan.datametric.domain.metric.MetricFieldBinding;
 import com.cyan.datametric.enums.MetricType;
 import com.cyan.datametric.enums.StatFunc;
 import lombok.Data;
@@ -40,18 +41,32 @@ public class ResolvedMetric {
 
     /**
      * 数据库名称
+     *
+     * @deprecated 请使用 fieldBindings。
      */
+    @Deprecated
     private String dbName;
 
     /**
      * 表名称
+     *
+     * @deprecated 请使用 fieldBindings。
      */
+    @Deprecated
     private String tblName;
 
     /**
      * 字段名称
+     *
+     * @deprecated 请使用 fieldBindings。
      */
+    @Deprecated
     private String colName;
+
+    /**
+     * 字段绑定候选
+     */
+    private List<MetricFieldBinding> fieldBindings;
 
     /**
      * 聚合函数
@@ -89,6 +104,13 @@ public class ResolvedMetric {
      * 获取完整表名
      */
     public String getFullTableName() {
+        if (fieldBindings != null && !fieldBindings.isEmpty()) {
+            MetricFieldBinding primary = fieldBindings.stream()
+                    .filter(binding -> Boolean.TRUE.equals(binding.getPrimaryBinding()))
+                    .findFirst()
+                    .orElse(fieldBindings.getFirst());
+            return primary.getSchemaName() + "." + primary.getTableName();
+        }
         if (dbName == null || tblName == null) {
             return null;
         }

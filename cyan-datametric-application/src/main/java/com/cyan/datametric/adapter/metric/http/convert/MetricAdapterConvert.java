@@ -33,6 +33,7 @@ public interface MetricAdapterConvert {
         dto.setDbName(bo.getDbName());
         dto.setTblName(bo.getTblName());
         dto.setColName(bo.getColName());
+        dto.setFieldBindings(toMetricFieldBindingDTOs(bo.getFieldBindings()));
         dto.setVersion(bo.getVersion());
         dto.setUpdatedAt(bo.getUpdatedAt());
         return dto;
@@ -86,6 +87,33 @@ public interface MetricAdapterConvert {
         dto.setDbName(bo.getDbName());
         dto.setTblName(bo.getTblName());
         dto.setColName(bo.getColName());
+        if (bo.getFilterCondition() != null) {
+            dto.setFilterCondition(bo.getFilterCondition().stream()
+                    .map(f -> new MetricDetailDTO.FilterConditionDTO().setField(f.getField()).setOp(f.getOp()).setValue(f.getValue()))
+                    .toList());
+        }
+        dto.setFieldBindings(toMetricFieldBindingDTOs(bo.getFieldBindings()));
+        return dto;
+    }
+
+    default java.util.List<MetricFieldBindingDTO> toMetricFieldBindingDTOs(java.util.List<MetricFieldBindingBO> bos) {
+        if (bos == null) return null;
+        return bos.stream().map(this::toMetricFieldBindingDTO).toList();
+    }
+
+    default MetricFieldBindingDTO toMetricFieldBindingDTO(MetricFieldBindingBO bo) {
+        if (bo == null) return null;
+        MetricFieldBindingDTO dto = new MetricFieldBindingDTO();
+        dto.setId(bo.getId());
+        dto.setMetricId(bo.getMetricId());
+        dto.setCatalogName(bo.getCatalogName());
+        dto.setSchemaName(bo.getSchemaName());
+        dto.setTableName(bo.getTableName());
+        dto.setColumnName(bo.getColumnName());
+        dto.setSourceExpr(bo.getSourceExpr());
+        dto.setPrimaryBinding(bo.getPrimaryBinding());
+        dto.setSortOrder(bo.getSortOrder());
+        dto.setUpdatedAt(bo.getUpdatedAt());
         if (bo.getFilterCondition() != null) {
             dto.setFilterCondition(bo.getFilterCondition().stream()
                     .map(f -> new MetricDetailDTO.FilterConditionDTO().setField(f.getField()).setOp(f.getOp()).setValue(f.getValue()))

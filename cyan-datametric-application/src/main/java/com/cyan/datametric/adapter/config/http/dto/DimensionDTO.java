@@ -39,4 +39,9 @@ public class DimensionDTO {
     private Integer sortOrder;
     private String description;
     private LocalDateTime updatedAt;
+
+    /**
+     * 维度字段绑定列表
+     */
+    private List<DimensionFieldBindingDTO> fieldBindings;
 }

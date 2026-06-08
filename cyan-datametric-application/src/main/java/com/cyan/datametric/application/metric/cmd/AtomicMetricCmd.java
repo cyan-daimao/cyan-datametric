@@ -46,28 +46,48 @@ public class AtomicMetricCmd {
 
     /**
      * 数据源名称
+     *
+     * @deprecated 请使用 fieldBindings。
      */
+    @Deprecated
     private String dsName;
 
     /**
      * 数据库名称
+     *
+     * @deprecated 请使用 fieldBindings。
      */
+    @Deprecated
     private String dbName;
 
     /**
      * 表名称
+     *
+     * @deprecated 请使用 fieldBindings。
      */
+    @Deprecated
     private String tblName;
 
     /**
      * 字段名称
+     *
+     * @deprecated 请使用 fieldBindings。
      */
+    @Deprecated
     private String colName;
 
     /**
      * 过滤条件
+     *
+     * @deprecated 请使用 fieldBindings。
      */
+    @Deprecated
     private List<FilterConditionCmd> filterCondition;
+
+    /**
+     * 指标字段绑定列表
+     */
+    private List<MetricFieldBindingCmd> fieldBindings;
 
     /**
      * 主题域编码

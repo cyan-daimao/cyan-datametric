@@ -5,6 +5,7 @@ import lombok.Data;
 import lombok.experimental.Accessors;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 /**
  * 指标列表项DTO
@@ -32,6 +33,7 @@ public class MetricDTO {
     private String dbName;
     private String tblName;
     private String colName;
+    private List<MetricFieldBindingDTO> fieldBindings;
     private Integer version;
     @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss", timezone = "GMT+8")
     private LocalDateTime updatedAt;

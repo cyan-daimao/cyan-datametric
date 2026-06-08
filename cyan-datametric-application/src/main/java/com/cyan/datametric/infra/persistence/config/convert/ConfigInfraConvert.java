@@ -89,13 +89,6 @@ public interface ConfigInfraConvert {
             }
         }
         d.setCategoryId(dimensionDO.getCategoryId() == null ? null : String.valueOf(dimensionDO.getCategoryId()));
-        d.setSchemaName(dimensionDO.getSchemaName());
-        d.setTableName(dimensionDO.getTableName());
-        d.setColumnName(dimensionDO.getColumnName());
-        d.setDisplayColumn(dimensionDO.getDisplayColumn());
-        d.setSourceType(dimensionDO.getSourceType());
-        d.setSourceExpr(dimensionDO.getSourceExpr());
-        d.setSourceTable(dimensionDO.getSourceTable());
         d.setHierarchyCode(dimensionDO.getHierarchyCode());
         d.setHierarchyName(dimensionDO.getHierarchyName());
         d.setParentDimCode(dimensionDO.getParentDimCode());
@@ -122,13 +115,6 @@ public interface ConfigInfraConvert {
             d.setDimValues(JSON.toJSONString(dimension.getDimValues()));
         }
         d.setCategoryId(dimension.getCategoryId() == null ? null : Long.parseLong(dimension.getCategoryId()));
-        d.setSchemaName(dimension.getSchemaName());
-        d.setTableName(dimension.getTableName());
-        d.setColumnName(dimension.getColumnName());
-        d.setDisplayColumn(dimension.getDisplayColumn());
-        d.setSourceType(dimension.getSourceType());
-        d.setSourceExpr(dimension.getSourceExpr());
-        d.setSourceTable(dimension.getSourceTable());
         d.setHierarchyCode(dimension.getHierarchyCode());
         d.setHierarchyName(dimension.getHierarchyName());
         d.setParentDimCode(dimension.getParentDimCode());

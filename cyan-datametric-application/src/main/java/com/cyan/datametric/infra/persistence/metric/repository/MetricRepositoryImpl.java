@@ -3,6 +3,8 @@ package com.cyan.datametric.infra.persistence.metric.repository;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.cyan.datametric.domain.metric.Metric;
+import com.cyan.datametric.domain.metric.MetricFieldBinding;
+import com.cyan.datametric.domain.metric.repository.MetricFieldBindingRepository;
 import com.cyan.datametric.domain.metric.query.MetricPageQuery;
 import com.cyan.datametric.domain.metric.repository.MetricRepository;
 import com.cyan.datametric.enums.MetricStatus;
@@ -43,6 +45,7 @@ public class MetricRepositoryImpl implements MetricRepository {
     private final MetricCompositeMapper compositeMapper;
     private final MetricDefinitionHistoryMapper historyMapper;
     private final MetricInfraConvert metricInfraConvert;
+    private final MetricFieldBindingRepository metricFieldBindingRepository;
 
     @Override
     public Metric findById(String id) {
@@ -245,6 +248,9 @@ public class MetricRepositoryImpl implements MetricRepository {
                 MetricAtomicDO atomic = atomicMapper.selectOne(w);
                 if (atomic != null) {
                     metric.setAtomicExt(metricInfraConvert.toAtomicExt(atomic));
+                    List<MetricFieldBinding> bindings = metricFieldBindingRepository.findByMetricId(metric.getId());
+                    metric.getAtomicExt().setFieldBindings(bindings);
+                    applyPrimaryBindingCompat(metric.getAtomicExt(), bindings);
                 }
             }
             case DERIVED -> {
@@ -278,6 +284,7 @@ public class MetricRepositoryImpl implements MetricRepository {
                     d.setId(SnowflakeIdUtil.nextId());
                     d.setMetricId(mid);
                     atomicMapper.insert(d);
+                    saveMetricBindings(metric, mid);
                 }
             }
             case DERIVED -> {
@@ -308,7 +315,8 @@ public class MetricRepositoryImpl implements MetricRepository {
             case ATOMIC -> {
                 deleteDerivedExt(mid);
                 deleteCompositeExt(mid);
-                upsertAtomicExt(metric, mid);
+        upsertAtomicExt(metric, mid);
+                saveMetricBindings(metric, mid);
             }
             case DERIVED -> {
                 deleteAtomicExt(mid);
@@ -349,6 +357,46 @@ public class MetricRepositoryImpl implements MetricRepository {
         }
         dataObject.setId(existing.getId());
         atomicMapper.updateById(dataObject);
+    }
+
+    /**
+     * 保存指标绑定
+     */
+    private void saveMetricBindings(Metric metric, Long mid) {
+        metricFieldBindingRepository.deleteByMetricId(String.valueOf(mid));
+        if (metric.getAtomicExt() == null || metric.getAtomicExt().getFieldBindings() == null) {
+            return;
+        }
+        boolean hasPrimary = metric.getAtomicExt().getFieldBindings().stream()
+                .anyMatch(binding -> Boolean.TRUE.equals(binding.getPrimaryBinding()));
+        int index = 0;
+        for (MetricFieldBinding binding : metric.getAtomicExt().getFieldBindings()) {
+            binding.setId(null);
+            binding.setMetricId(String.valueOf(mid));
+            binding.setPrimaryBinding(hasPrimary ? Boolean.TRUE.equals(binding.getPrimaryBinding()) : index == 0);
+            binding.setSortOrder(binding.getSortOrder() == null ? index : binding.getSortOrder());
+            binding.save(metricFieldBindingRepository);
+            index++;
+        }
+    }
+
+    /**
+     * 用主绑定填充旧展示字段
+     */
+    private void applyPrimaryBindingCompat(com.cyan.datametric.domain.metric.MetricAtomicExt ext,
+                                           List<MetricFieldBinding> bindings) {
+        if (ext == null || bindings == null || bindings.isEmpty()) {
+            return;
+        }
+        MetricFieldBinding primary = bindings.stream()
+                .filter(binding -> Boolean.TRUE.equals(binding.getPrimaryBinding()))
+                .findFirst()
+                .orElse(bindings.getFirst());
+        ext.setDsName(primary.getCatalogName());
+        ext.setDbName(primary.getSchemaName());
+        ext.setTblName(primary.getTableName());
+        ext.setColName(primary.getColumnName());
+        ext.setFilterCondition(primary.getFilterCondition());
     }
 
     /**
@@ -399,6 +447,7 @@ public class MetricRepositoryImpl implements MetricRepository {
     private void deleteAtomicExt(Long mid) {
         LambdaQueryWrapper<MetricAtomicDO> aw = new LambdaQueryWrapper<MetricAtomicDO>().eq(MetricAtomicDO::getMetricId, mid);
         atomicMapper.delete(aw);
+        metricFieldBindingRepository.deleteByMetricId(String.valueOf(mid));
     }
 
     /**

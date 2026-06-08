@@ -43,6 +43,7 @@ public class MetricDetailDTO {
         private String tblName;
         private String colName;
         private List<FilterConditionDTO> filterCondition;
+        private List<MetricFieldBindingDTO> fieldBindings;
     }
 
     @Data

@@ -28,14 +28,31 @@ CREATE TABLE IF NOT EXISTS metric_atomic (
     id BIGINT AUTO_INCREMENT PRIMARY KEY COMMENT '主键',
     metric_id BIGINT NOT NULL COMMENT '指标定义ID',
     stat_func VARCHAR(32) NOT NULL COMMENT '统计函数: SUM/AVG/COUNT/COUNT_DISTINCT/MAX/MIN',
-    ds_name VARCHAR(64) NOT NULL COMMENT '数据源名称',
-    db_name VARCHAR(64) NOT NULL COMMENT '数据库名称',
-    tbl_name VARCHAR(128) NOT NULL COMMENT '表名称',
-    col_name VARCHAR(128) NOT NULL COMMENT '字段名称',
-    filter_condition JSON COMMENT '过滤条件JSON',
     deleted_at DATETIME DEFAULT NULL COMMENT '逻辑删除时间',
     UNIQUE KEY uk_metric_id (metric_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='原子指标扩展表';
+
+-- 指标字段绑定表
+CREATE TABLE IF NOT EXISTS metric_field_binding (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY COMMENT '主键',
+    metric_id BIGINT NOT NULL COMMENT '指标定义ID',
+    catalog_name VARCHAR(64) DEFAULT 'iceberg' COMMENT 'catalog 名称',
+    schema_name VARCHAR(128) NOT NULL COMMENT 'schema 名称',
+    table_name VARCHAR(128) NOT NULL COMMENT '表名称',
+    column_name VARCHAR(128) DEFAULT NULL COMMENT '字段名称',
+    source_expr VARCHAR(512) DEFAULT NULL COMMENT '来源表达式',
+    filter_condition JSON COMMENT '过滤条件JSON',
+    is_primary TINYINT(1) NOT NULL DEFAULT 0 COMMENT '是否主绑定',
+    sort_order INT NOT NULL DEFAULT 0 COMMENT '排序号',
+    create_by VARCHAR(64) COMMENT '创建人',
+    update_by VARCHAR(64) COMMENT '修改人',
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    deleted_at DATETIME DEFAULT NULL COMMENT '逻辑删除时间',
+    INDEX idx_metric_id (metric_id),
+    INDEX idx_metric_table (catalog_name, schema_name, table_name),
+    INDEX idx_metric_primary (metric_id, is_primary)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='指标字段绑定表';
 
 -- 派生指标扩展表
 CREATE TABLE IF NOT EXISTS metric_derived (
@@ -122,12 +139,6 @@ CREATE TABLE IF NOT EXISTS metric_dimension (
     data_type VARCHAR(50) COMMENT '数据类型: STRING/INT/BIGINT/DECIMAL/DATE/DATETIME',
     dim_values JSON COMMENT '维度可选值（枚举维度时填写）',
     category_id BIGINT COMMENT '维度分类ID',
-    table_name VARCHAR(128) COMMENT '关联数仓维表名',
-    column_name VARCHAR(128) COMMENT '关联维表字段名',
-    display_column VARCHAR(128) COMMENT '显示字段名（BI展示用）',
-    source_type VARCHAR(32) DEFAULT 'COLUMN' COMMENT '来源类型: COLUMN/JSON_PATH/EXPRESSION',
-    source_expr VARCHAR(512) DEFAULT NULL COMMENT '维度取数字段或表达式',
-    source_table VARCHAR(128) DEFAULT NULL COMMENT '来源事实表',
     hierarchy_code VARCHAR(64) DEFAULT NULL COMMENT '层级编码',
     hierarchy_name VARCHAR(128) DEFAULT NULL COMMENT '层级名称',
     parent_dim_code VARCHAR(64) DEFAULT NULL COMMENT '父级维度编码',
@@ -144,6 +155,30 @@ CREATE TABLE IF NOT EXISTS metric_dimension (
     INDEX idx_dimension_kind (dimension_kind),
     INDEX idx_hierarchy_code (hierarchy_code)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='公共维度表';
+
+-- 维度字段绑定表
+CREATE TABLE IF NOT EXISTS metric_dimension_binding (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY COMMENT '主键',
+    dim_id BIGINT NOT NULL COMMENT '维度ID',
+    table_role VARCHAR(32) NOT NULL COMMENT '表角色: FACT/DIMENSION',
+    catalog_name VARCHAR(64) DEFAULT 'iceberg' COMMENT 'catalog 名称',
+    schema_name VARCHAR(128) NOT NULL COMMENT 'schema 名称',
+    table_name VARCHAR(128) NOT NULL COMMENT '表名称',
+    column_name VARCHAR(128) DEFAULT NULL COMMENT '字段名称',
+    display_column VARCHAR(128) DEFAULT NULL COMMENT '显示字段',
+    source_type VARCHAR(32) DEFAULT 'COLUMN' COMMENT '来源类型: COLUMN/JSON_PATH/EXPRESSION',
+    source_expr VARCHAR(512) DEFAULT NULL COMMENT '来源表达式',
+    is_primary TINYINT(1) NOT NULL DEFAULT 0 COMMENT '是否主绑定',
+    sort_order INT NOT NULL DEFAULT 0 COMMENT '排序号',
+    create_by VARCHAR(64) COMMENT '创建人',
+    update_by VARCHAR(64) COMMENT '修改人',
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    deleted_at DATETIME DEFAULT NULL COMMENT '逻辑删除时间',
+    INDEX idx_dim_id (dim_id),
+    INDEX idx_dim_table (catalog_name, schema_name, table_name),
+    INDEX idx_dim_primary (dim_id, is_primary)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='维度字段绑定表';
 
 -- 维度分类表
 CREATE TABLE IF NOT EXISTS metric_dimension_category (
@@ -236,14 +271,29 @@ INSERT INTO metric_time_period(period_code, period_name, period_type, relative_v
 -- 注意：日/周/月/年/季度/小时/分钟/秒 等时间粒度请优先使用系统内置时间维度
 -- （DIM_DATE_DAY、DIM_DATE_HOUR、DIM_TIME_HOUR 等），无需维护 d_date 维表。
 -- DIM_DATE 保留作为维表方案的向后兼容。
-INSERT INTO metric_dimension(dim_code, dim_name, dim_type, data_type, dim_values, category_id, table_name, column_name, description) VALUES
-('DIM_DATE', '日期', 'DATE', 'DATE', null, (SELECT id FROM metric_dimension_category WHERE name='时间周期'), 'd_date', 'dt', '日期维度，按天统计。推荐使用系统内置维度 DIM_DATE_DAY，无需维表。'),
-('DIM_PROVINCE', '省份', 'GEO', 'STRING', '["北京","上海","广东","浙江","江苏"]', (SELECT id FROM metric_dimension_category WHERE name='地理位置'), 'd_province', 'province_name', '省级地理维度'),
-('DIM_CITY', '城市', 'GEO', 'STRING', '["北京","上海","广州","深圳","杭州"]', (SELECT id FROM metric_dimension_category WHERE name='地理位置'), 'd_city', 'city_name', '城市级地理维度'),
-('DIM_CHANNEL', '渠道', 'ENUM', 'STRING', '["APP","WEB","小程序","H5"]', (SELECT id FROM metric_dimension_category WHERE name='渠道来源'), 'd_channel', 'channel_name', '用户访问渠道'),
-('DIM_DEVICE_TYPE', '设备类型', 'ENUM', 'STRING', '["iOS","Android","PC","Mac"]', (SELECT id FROM metric_dimension_category WHERE name='设备信息'), 'd_device', 'device_type', '用户设备类型'),
-('DIM_USER_TYPE', '用户类型', 'ENUM', 'STRING', '["新用户","老用户","回流用户"]', (SELECT id FROM metric_dimension_category WHERE name='用户属性'), 'd_user_type', 'user_type', '用户类型划分'),
-('DIM_PAYMENT_METHOD', '支付方式', 'ENUM', 'STRING', '["支付宝","微信支付","银行卡"]', (SELECT id FROM metric_dimension_category WHERE name='交易属性'), 'd_payment_method', 'payment_method', '订单支付方式');
+INSERT INTO metric_dimension(dim_code, dim_name, dim_type, data_type, dim_values, category_id, description) VALUES
+('DIM_DATE', '日期', 'DATE', 'DATE', null, (SELECT id FROM metric_dimension_category WHERE name='时间周期'), '日期维度，按天统计。推荐使用系统内置维度 DIM_DATE_DAY。'),
+('DIM_PROVINCE', '省份', 'GEO', 'STRING', '["北京","上海","广东","浙江","江苏"]', (SELECT id FROM metric_dimension_category WHERE name='地理位置'), '省级地理维度'),
+('DIM_CITY', '城市', 'GEO', 'STRING', '["北京","上海","广州","深圳","杭州"]', (SELECT id FROM metric_dimension_category WHERE name='地理位置'), '城市级地理维度'),
+('DIM_CHANNEL', '渠道', 'ENUM', 'STRING', '["APP","WEB","小程序","H5"]', (SELECT id FROM metric_dimension_category WHERE name='渠道来源'), '用户访问渠道'),
+('DIM_DEVICE_TYPE', '设备类型', 'ENUM', 'STRING', '["iOS","Android","PC","Mac"]', (SELECT id FROM metric_dimension_category WHERE name='设备信息'), '用户设备类型'),
+('DIM_USER_TYPE', '用户类型', 'ENUM', 'STRING', '["新用户","老用户","回流用户"]', (SELECT id FROM metric_dimension_category WHERE name='用户属性'), '用户类型划分'),
+('DIM_PAYMENT_METHOD', '支付方式', 'ENUM', 'STRING', '["支付宝","微信支付","银行卡"]', (SELECT id FROM metric_dimension_category WHERE name='交易属性'), '订单支付方式');
+
+INSERT INTO metric_dimension_binding(dim_id, table_role, catalog_name, schema_name, table_name, column_name, source_type, is_primary, sort_order)
+SELECT id, 'DIMENSION', 'iceberg', 'default', 'd_date', 'dt', 'COLUMN', 1, 0 FROM metric_dimension WHERE dim_code='DIM_DATE';
+INSERT INTO metric_dimension_binding(dim_id, table_role, catalog_name, schema_name, table_name, column_name, source_type, is_primary, sort_order)
+SELECT id, 'DIMENSION', 'iceberg', 'default', 'd_province', 'province_name', 'COLUMN', 1, 0 FROM metric_dimension WHERE dim_code='DIM_PROVINCE';
+INSERT INTO metric_dimension_binding(dim_id, table_role, catalog_name, schema_name, table_name, column_name, source_type, is_primary, sort_order)
+SELECT id, 'DIMENSION', 'iceberg', 'default', 'd_city', 'city_name', 'COLUMN', 1, 0 FROM metric_dimension WHERE dim_code='DIM_CITY';
+INSERT INTO metric_dimension_binding(dim_id, table_role, catalog_name, schema_name, table_name, column_name, source_type, is_primary, sort_order)
+SELECT id, 'DIMENSION', 'iceberg', 'default', 'd_channel', 'channel_name', 'COLUMN', 1, 0 FROM metric_dimension WHERE dim_code='DIM_CHANNEL';
+INSERT INTO metric_dimension_binding(dim_id, table_role, catalog_name, schema_name, table_name, column_name, source_type, is_primary, sort_order)
+SELECT id, 'DIMENSION', 'iceberg', 'default', 'd_device', 'device_type', 'COLUMN', 1, 0 FROM metric_dimension WHERE dim_code='DIM_DEVICE_TYPE';
+INSERT INTO metric_dimension_binding(dim_id, table_role, catalog_name, schema_name, table_name, column_name, source_type, is_primary, sort_order)
+SELECT id, 'DIMENSION', 'iceberg', 'default', 'd_user_type', 'user_type', 'COLUMN', 1, 0 FROM metric_dimension WHERE dim_code='DIM_USER_TYPE';
+INSERT INTO metric_dimension_binding(dim_id, table_role, catalog_name, schema_name, table_name, column_name, source_type, is_primary, sort_order)
+SELECT id, 'DIMENSION', 'iceberg', 'default', 'd_payment_method', 'payment_method', 'COLUMN', 1, 0 FROM metric_dimension WHERE dim_code='DIM_PAYMENT_METHOD';
 
 -- 指标定义历史快照表
 CREATE TABLE IF NOT EXISTS metric_definition_history (

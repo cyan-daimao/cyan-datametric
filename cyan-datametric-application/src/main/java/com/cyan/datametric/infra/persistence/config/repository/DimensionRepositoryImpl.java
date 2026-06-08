@@ -4,7 +4,9 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.cyan.datametric.domain.config.BuiltinTimeDimension;
 import com.cyan.datametric.domain.config.Dimension;
+import com.cyan.datametric.domain.config.DimensionFieldBinding;
 import com.cyan.datametric.domain.config.query.DimensionPageQuery;
+import com.cyan.datametric.domain.config.repository.DimensionFieldBindingRepository;
 import com.cyan.datametric.domain.config.repository.DimensionRepository;
 import com.cyan.datametric.infra.persistence.config.convert.ConfigInfraConvert;
 import com.cyan.datametric.infra.persistence.config.dos.MetricDimensionDO;
@@ -30,12 +32,13 @@ public class DimensionRepositoryImpl implements DimensionRepository {
 
     private final MetricDimensionMapper dimensionMapper;
     private final ConfigInfraConvert configInfraConvert;
+    private final DimensionFieldBindingRepository dimensionFieldBindingRepository;
 
 
     @Override
     public Dimension findById(String id) {
         MetricDimensionDO dimensionDO = dimensionMapper.selectById(Long.parseLong(id));
-        return configInfraConvert.toDimension(dimensionDO);
+        return loadBindings(configInfraConvert.toDimension(dimensionDO));
     }
 
     @Override
@@ -43,7 +46,7 @@ public class DimensionRepositoryImpl implements DimensionRepository {
         LambdaQueryWrapper<MetricDimensionDO> wrapper = new LambdaQueryWrapper<MetricDimensionDO>()
                 .eq(MetricDimensionDO::getDimCode, dimCode);
         MetricDimensionDO dimensionDO = dimensionMapper.selectOne(wrapper);
-        Dimension dimension = configInfraConvert.toDimension(dimensionDO);
+        Dimension dimension = loadBindings(configInfraConvert.toDimension(dimensionDO));
         if (dimension == null) {
             BuiltinTimeDimension builtin = BuiltinTimeDimension.of(dimCode);
             if (builtin != null) {
@@ -66,6 +69,7 @@ public class DimensionRepositoryImpl implements DimensionRepository {
         Page<MetricDimensionDO> result = dimensionMapper.selectPage(page, wrapper);
         List<Dimension> list = Optional.ofNullable(result.getRecords()).orElse(List.of()).stream()
                 .map(configInfraConvert::toDimension)
+                .map(this::loadBindings)
                 .collect(java.util.stream.Collectors.toCollection(ArrayList::new));
 
         // 第一页头部插入内置时间维度（支持 dimName 过滤）
@@ -92,6 +96,7 @@ public class DimensionRepositoryImpl implements DimensionRepository {
         dimension.setId(String.valueOf(id));
         MetricDimensionDO dimensionDO = configInfraConvert.toDimensionDO(dimension);
         dimensionMapper.insert(dimensionDO);
+        saveBindings(dimension, id);
         return findById(dimension.getId());
     }
 
@@ -99,12 +104,70 @@ public class DimensionRepositoryImpl implements DimensionRepository {
     public Dimension update(Dimension dimension) {
         MetricDimensionDO dimensionDO = configInfraConvert.toDimensionDO(dimension);
         dimensionMapper.updateById(dimensionDO);
+        saveBindings(dimension, Long.parseLong(dimension.getId()));
         return findById(dimension.getId());
     }
 
     @Override
     public void deleteById(String id) {
         dimensionMapper.deleteById(Long.parseLong(id));
+        dimensionFieldBindingRepository.deleteByDimId(id);
+    }
+
+    /**
+     * 加载维度字段绑定
+     */
+    private Dimension loadBindings(Dimension dimension) {
+        if (dimension == null || dimension.getId() == null || BuiltinTimeDimension.of(dimension.getDimCode()) != null) {
+            return dimension;
+        }
+        List<DimensionFieldBinding> bindings = dimensionFieldBindingRepository.findByDimId(dimension.getId());
+        dimension.setFieldBindings(bindings);
+        applyPrimaryBindingCompat(dimension, bindings);
+        return dimension;
+    }
+
+    /**
+     * 保存维度字段绑定
+     */
+    private void saveBindings(Dimension dimension, Long dimId) {
+        dimensionFieldBindingRepository.deleteByDimId(String.valueOf(dimId));
+        if (dimension.getFieldBindings() == null) {
+            return;
+        }
+        boolean hasPrimary = dimension.getFieldBindings().stream()
+                .anyMatch(binding -> Boolean.TRUE.equals(binding.getPrimaryBinding()));
+        int index = 0;
+        for (DimensionFieldBinding binding : dimension.getFieldBindings()) {
+            binding.setId(null);
+            binding.setDimId(String.valueOf(dimId));
+            binding.setPrimaryBinding(hasPrimary ? Boolean.TRUE.equals(binding.getPrimaryBinding()) : index == 0);
+            binding.setSortOrder(binding.getSortOrder() == null ? index : binding.getSortOrder());
+            binding.save(dimensionFieldBindingRepository);
+            index++;
+        }
+    }
+
+    /**
+     * 用主绑定填充旧展示字段
+     */
+    private void applyPrimaryBindingCompat(Dimension dimension, List<DimensionFieldBinding> bindings) {
+        if (dimension == null || bindings == null || bindings.isEmpty()) {
+            return;
+        }
+        DimensionFieldBinding primary = bindings.stream()
+                .filter(binding -> Boolean.TRUE.equals(binding.getPrimaryBinding()))
+                .findFirst()
+                .orElse(bindings.getFirst());
+        dimension.setSchemaName(primary.getSchemaName());
+        dimension.setTableName(primary.getTableName());
+        dimension.setColumnName(primary.getColumnName());
+        dimension.setDisplayColumn(primary.getDisplayColumn());
+        dimension.setSourceType(primary.getSourceType());
+        dimension.setSourceExpr(primary.getSourceExpr());
+        if (primary.factBinding()) {
+            dimension.setSourceTable(primary.tableRef("iceberg"));
+        }
     }
 
     /**

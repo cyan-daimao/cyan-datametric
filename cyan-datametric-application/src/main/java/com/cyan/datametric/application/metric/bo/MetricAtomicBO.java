@@ -22,28 +22,48 @@ public class MetricAtomicBO {
 
     /**
      * 数据源名称
+     *
+     * @deprecated 仅用于兼容旧展示。
      */
+    @Deprecated
     private String dsName;
 
     /**
      * 数据库名称
+     *
+     * @deprecated 仅用于兼容旧展示。
      */
+    @Deprecated
     private String dbName;
 
     /**
      * 表名称
+     *
+     * @deprecated 仅用于兼容旧展示。
      */
+    @Deprecated
     private String tblName;
 
     /**
      * 字段名称
+     *
+     * @deprecated 仅用于兼容旧展示。
      */
+    @Deprecated
     private String colName;
 
     /**
      * 过滤条件
+     *
+     * @deprecated 仅用于兼容旧展示。
      */
+    @Deprecated
     private List<FilterConditionBO> filterCondition;
+
+    /**
+     * 字段绑定列表
+     */
+    private List<MetricFieldBindingBO> fieldBindings;
 
     @Data
     @Accessors(chain = true)

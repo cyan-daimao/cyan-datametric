@@ -6,6 +6,7 @@ import lombok.Data;
 import lombok.experimental.Accessors;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 /**
  * 指标业务对象
@@ -79,23 +80,40 @@ public class MetricBO {
 
     /**
      * 数据源名称（原子指标）
+     *
+     * @deprecated 仅用于兼容旧展示。
      */
+    @Deprecated
     private String dsName;
 
     /**
      * 数据库名称（原子指标）
+     *
+     * @deprecated 仅用于兼容旧展示。
      */
+    @Deprecated
     private String dbName;
 
     /**
      * 表名称（原子指标）
+     *
+     * @deprecated 仅用于兼容旧展示。
      */
+    @Deprecated
     private String tblName;
 
     /**
      * 字段名称（原子指标）
+     *
+     * @deprecated 仅用于兼容旧展示。
      */
+    @Deprecated
     private String colName;
+
+    /**
+     * 指标字段绑定列表
+     */
+    private List<MetricFieldBindingBO> fieldBindings;
 
     /**
      * 版本号

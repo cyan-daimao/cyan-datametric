@@ -16,8 +16,10 @@ import com.cyan.datametric.domain.config.repository.TimePeriodRepository;
 import com.cyan.datametric.domain.metric.LineageNode;
 import com.cyan.datametric.domain.metric.Metric;
 import com.cyan.datametric.domain.metric.MetricAtomicExt;
+import com.cyan.datametric.domain.metric.MetricFieldBinding;
 import com.cyan.datametric.domain.metric.query.MetricPageQuery;
 import com.cyan.datametric.domain.metric.repository.MetricFavoriteRepository;
+import com.cyan.datametric.domain.metric.repository.MetricFieldBindingRepository;
 import com.cyan.datametric.domain.metric.repository.MetricLineageRepository;
 import com.cyan.datametric.domain.metric.repository.MetricRepository;
 import com.cyan.datametric.enums.MetricStatus;
@@ -50,6 +52,7 @@ public class MetricServiceImpl implements MetricService {
     private final MetricRepository metricRepository;
     private final MetricLineageRepository lineageRepository;
     private final MetricFavoriteRepository favoriteRepository;
+    private final MetricFieldBindingRepository metricFieldBindingRepository;
     private final ModifierRepository modifierRepository;
     private final TimePeriodRepository timePeriodRepository;
     private final MetricAppConvert metricAppConvert;
@@ -95,6 +98,7 @@ public class MetricServiceImpl implements MetricService {
             metric.setMetricCode("M" + SnowflakeIdUtil.nextId());
         }
         metric.setMetricType(MetricType.ATOMIC);
+        normalizeAtomicBindings(metric);
         metric = metric.save(metricRepository);
         syncMetricFieldLineage(metric);
         return metricBOAssembler.assembleBasic(metric);
@@ -134,6 +138,7 @@ public class MetricServiceImpl implements MetricService {
         if (metric.getSecurityLevel() == null) {
             metric.setSecurityLevel(existing.getSecurityLevel());
         }
+        normalizeAtomicBindings(metric);
         metric = metric.update(metricRepository);
         syncMetricFieldLineage(metric);
         return metricBOAssembler.assembleBasic(metric);
@@ -423,6 +428,108 @@ public class MetricServiceImpl implements MetricService {
                     .toList();
         }
         metricFieldLineageSyncService.sync(metric, atomicMetric, refMetrics);
+    }
+
+    /**
+     * 归一化原子指标字段绑定
+     */
+    private void normalizeAtomicBindings(Metric metric) {
+        if (metric == null || metric.getAtomicExt() == null) {
+            return;
+        }
+        MetricAtomicExt atomicExt = metric.getAtomicExt();
+        if (atomicExt.getFieldBindings() != null && !atomicExt.getFieldBindings().isEmpty()) {
+            return;
+        }
+        if (!org.springframework.util.StringUtils.hasText(atomicExt.getDbName())
+                || !org.springframework.util.StringUtils.hasText(atomicExt.getTblName())
+                || !org.springframework.util.StringUtils.hasText(atomicExt.getColName())) {
+            return;
+        }
+        atomicExt.setFieldBindings(List.of(new com.cyan.datametric.domain.metric.MetricFieldBinding()
+                .setCatalogName(org.springframework.util.StringUtils.hasText(atomicExt.getDsName())
+                        ? atomicExt.getDsName()
+                        : defaultDatasource)
+                .setSchemaName(atomicExt.getDbName())
+                .setTableName(atomicExt.getTblName())
+                .setColumnName(atomicExt.getColName())
+                .setFilterCondition(atomicExt.getFilterCondition())
+                .setPrimaryBinding(true)
+                .setSortOrder(0)));
+    }
+
+    @Override
+    public List<MetricFieldBindingBO> listFieldBindings(String metricId) {
+        return toMetricFieldBindingBOs(metricFieldBindingRepository.findByMetricId(metricId));
+    }
+
+    @Override
+    @Transactional
+    public MetricFieldBindingBO saveFieldBinding(String metricId, MetricFieldBindingCmd cmd, String operator) {
+        Metric metric = metricRepository.findById(metricId);
+        Assert.notNull(metric, new BusinessException("指标不存在"));
+        MetricFieldBinding binding = metricAppConvert.toMetricFieldBinding(cmd);
+        binding.setMetricId(metricId);
+        binding.setUpdateBy(operator);
+        MetricFieldBinding saved;
+        if (org.springframework.util.StringUtils.hasText(binding.getId())) {
+            saved = binding.update(metricFieldBindingRepository);
+        } else {
+            binding.setCreateBy(operator);
+            saved = binding.save(metricFieldBindingRepository);
+        }
+        return toMetricFieldBindingBO(saved);
+    }
+
+    @Override
+    @Transactional
+    public void deleteFieldBinding(String metricId, String bindingId) {
+        MetricFieldBinding binding = metricFieldBindingRepository.findById(bindingId);
+        Assert.notNull(binding, new BusinessException("指标字段绑定不存在"));
+        Assert.isTrue(metricId.equals(binding.getMetricId()), new BusinessException("指标字段绑定不属于当前指标"));
+        binding.delete(metricFieldBindingRepository);
+    }
+
+    @Override
+    @Transactional
+    public void setPrimaryFieldBinding(String metricId, String bindingId) {
+        MetricFieldBinding binding = metricFieldBindingRepository.findById(bindingId);
+        Assert.notNull(binding, new BusinessException("指标字段绑定不存在"));
+        Assert.isTrue(metricId.equals(binding.getMetricId()), new BusinessException("指标字段绑定不属于当前指标"));
+        metricFieldBindingRepository.setPrimary(metricId, bindingId);
+    }
+
+    /**
+     * 转换指标字段绑定列表
+     */
+    private List<MetricFieldBindingBO> toMetricFieldBindingBOs(List<MetricFieldBinding> bindings) {
+        if (bindings == null) {
+            return List.of();
+        }
+        return bindings.stream().map(this::toMetricFieldBindingBO).toList();
+    }
+
+    /**
+     * 转换指标字段绑定
+     */
+    private MetricFieldBindingBO toMetricFieldBindingBO(MetricFieldBinding binding) {
+        MetricFieldBindingBO bo = new MetricFieldBindingBO()
+                .setId(binding.getId())
+                .setMetricId(binding.getMetricId())
+                .setCatalogName(binding.getCatalogName())
+                .setSchemaName(binding.getSchemaName())
+                .setTableName(binding.getTableName())
+                .setColumnName(binding.getColumnName())
+                .setSourceExpr(binding.getSourceExpr())
+                .setPrimaryBinding(binding.getPrimaryBinding())
+                .setSortOrder(binding.getSortOrder())
+                .setUpdatedAt(binding.getUpdatedAt());
+        if (binding.getFilterCondition() != null) {
+            bo.setFilterCondition(binding.getFilterCondition().stream()
+                    .map(f -> new MetricAtomicBO.FilterConditionBO().setField(f.getField()).setOp(f.getOp()).setValue(f.getValue()))
+                    .toList());
+        }
+        return bo;
     }
 
     /**

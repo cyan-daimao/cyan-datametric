@@ -4,9 +4,11 @@ import com.cyan.arch.common.api.Response;
 import com.cyan.datametric.adapter.common.PageResultDTO;
 import com.cyan.datametric.adapter.config.http.convert.ConfigAdapterConvert;
 import com.cyan.datametric.adapter.config.http.dto.DimensionDTO;
+import com.cyan.datametric.adapter.config.http.dto.DimensionFieldBindingDTO;
 import com.cyan.datametric.application.config.DimensionService;
 import com.cyan.datametric.application.config.bo.DimensionBO;
 import com.cyan.datametric.application.config.cmd.DimensionCmd;
+import com.cyan.datametric.application.config.cmd.DimensionFieldBindingCmd;
 import com.cyan.datametric.domain.config.query.DimensionPageQuery;
 import com.cyan.employee.login.filter.UserContextHolder;
 import jakarta.validation.Valid;
@@ -60,6 +62,45 @@ public class DimensionController {
     @DeleteMapping("/{id}")
     public Response<Void> delete(@PathVariable("id") String id) {
         dimensionService.delete(id);
+        return Response.success();
+    }
+
+    @GetMapping("/{id}/field-bindings")
+    public Response<java.util.List<DimensionFieldBindingDTO>> listFieldBindings(@PathVariable("id") String id) {
+        return Response.success(dimensionService.listFieldBindings(id).stream()
+                .map(configAdapterConvert::toDimensionFieldBindingDTO)
+                .toList());
+    }
+
+    @PostMapping("/{id}/field-bindings")
+    public Response<DimensionFieldBindingDTO> saveFieldBinding(@PathVariable("id") String id,
+                                                               @RequestBody DimensionFieldBindingCmd cmd) {
+        String operator = UserContextHolder.getCurrentEmployee().getPassport();
+        return Response.success(configAdapterConvert.toDimensionFieldBindingDTO(
+                dimensionService.saveFieldBinding(id, cmd, operator)));
+    }
+
+    @PutMapping("/{id}/field-bindings/{bindingId}")
+    public Response<DimensionFieldBindingDTO> updateFieldBinding(@PathVariable("id") String id,
+                                                                 @PathVariable("bindingId") String bindingId,
+                                                                 @RequestBody DimensionFieldBindingCmd cmd) {
+        String operator = UserContextHolder.getCurrentEmployee().getPassport();
+        cmd.setId(bindingId);
+        return Response.success(configAdapterConvert.toDimensionFieldBindingDTO(
+                dimensionService.saveFieldBinding(id, cmd, operator)));
+    }
+
+    @DeleteMapping("/{id}/field-bindings/{bindingId}")
+    public Response<Void> deleteFieldBinding(@PathVariable("id") String id,
+                                             @PathVariable("bindingId") String bindingId) {
+        dimensionService.deleteFieldBinding(id, bindingId);
+        return Response.success();
+    }
+
+    @PutMapping("/{id}/field-bindings/{bindingId}/primary")
+    public Response<Void> setPrimaryFieldBinding(@PathVariable("id") String id,
+                                                 @PathVariable("bindingId") String bindingId) {
+        dimensionService.setPrimaryFieldBinding(id, bindingId);
         return Response.success();
     }
 }

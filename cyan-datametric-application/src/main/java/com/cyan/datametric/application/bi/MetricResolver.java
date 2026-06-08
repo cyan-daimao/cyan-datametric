@@ -7,6 +7,7 @@ import com.cyan.datametric.domain.config.repository.ModifierRepository;
 import com.cyan.datametric.domain.config.repository.TimePeriodRepository;
 import com.cyan.datametric.domain.metric.Metric;
 import com.cyan.datametric.domain.metric.MetricAtomicExt;
+import com.cyan.datametric.domain.metric.MetricFieldBinding;
 import com.cyan.datametric.domain.metric.repository.MetricRepository;
 import com.cyan.datametric.enums.MetricStatus;
 import lombok.RequiredArgsConstructor;
@@ -48,14 +49,17 @@ public class MetricResolver {
         return result;
     }
 
-    private ResolvedMetric resolveMetric(String metricId, String alias) {
-        Metric metric = metricRepository.findById(metricId);
+    private ResolvedMetric resolveMetric(String metricCode, String alias) {
+        Metric metric = metricRepository.findByMetricCode(metricCode);
+        if (metric == null) {
+            metric = metricRepository.findById(metricCode);
+        }
         Assert.notNull(metric, new BusinessException(MetricBiErrorCode.METRIC_NOT_FOUND.getMessage()));
         Assert.isTrue(metric.getStatus() != MetricStatus.OFFLINE,
                 new BusinessException(MetricBiErrorCode.METRIC_NOT_FOUND.getMessage()));
 
         ResolvedMetric resolved = new ResolvedMetric();
-        resolved.setMetricId(metricId);
+        resolved.setMetricId(metric.getMetricCode());
         resolved.setAlias(alias != null && !alias.isBlank() ? alias : metric.getMetricName());
         resolved.setOriginalType(metric.getMetricType());
 
@@ -74,6 +78,7 @@ public class MetricResolver {
         resolved.setDbName(ext.getDbName());
         resolved.setTblName(ext.getTblName());
         resolved.setColName(ext.getColName());
+        resolved.setFieldBindings(ext.getFieldBindings());
         resolved.setStatFunc(ext.getStatFunc());
         resolved.setAtomicFilters(ext.getFilterCondition());
     }
@@ -89,6 +94,7 @@ public class MetricResolver {
         resolved.setDbName(ext.getDbName());
         resolved.setTblName(ext.getTblName());
         resolved.setColName(ext.getColName());
+        resolved.setFieldBindings(ext.getFieldBindings());
         resolved.setStatFunc(ext.getStatFunc());
         resolved.setAtomicFilters(ext.getFilterCondition());
 

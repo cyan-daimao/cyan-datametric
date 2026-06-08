@@ -4,6 +4,7 @@ import com.cyan.datametric.application.metric.bo.MetricAtomicBO;
 import com.cyan.datametric.application.metric.bo.MetricBO;
 import com.cyan.datametric.application.metric.bo.MetricCompositeBO;
 import com.cyan.datametric.application.metric.bo.MetricDerivedBO;
+import com.cyan.datametric.application.metric.bo.MetricFieldBindingBO;
 import com.cyan.datametric.application.metric.convert.MetricAppConvert;
 import com.cyan.datametric.domain.metric.Metric;
 import com.cyan.datametric.domain.metric.MetricAtomicExt;
@@ -43,6 +44,7 @@ public class MetricBOAssembler {
             bo.setDbName(ext.getDbName());
             bo.setTblName(ext.getTblName());
             bo.setColName(ext.getColName());
+            bo.setFieldBindings(toBindingBOs(ext.getFieldBindings()));
         }
         return bo;
     }
@@ -64,6 +66,7 @@ public class MetricBOAssembler {
                         .map(f -> new MetricAtomicBO.FilterConditionBO().setField(f.getField()).setOp(f.getOp()).setValue(f.getValue()))
                         .toList());
             }
+            atomic.setFieldBindings(toBindingBOs(metric.getAtomicExt().getFieldBindings()));
             bo.setAtomic(atomic);
         }
         if (metric.getDerivedExt() != null) {
@@ -125,5 +128,33 @@ public class MetricBOAssembler {
         if (subject != null) {
             bo.setSubjectName(subject.getSubjectName());
         }
+    }
+
+    /**
+     * 转换字段绑定
+     */
+    private List<MetricFieldBindingBO> toBindingBOs(List<com.cyan.datametric.domain.metric.MetricFieldBinding> bindings) {
+        if (bindings == null) {
+            return null;
+        }
+        return bindings.stream().map(binding -> {
+            MetricFieldBindingBO bo = new MetricFieldBindingBO()
+                    .setId(binding.getId())
+                    .setMetricId(binding.getMetricId())
+                    .setCatalogName(binding.getCatalogName())
+                    .setSchemaName(binding.getSchemaName())
+                    .setTableName(binding.getTableName())
+                    .setColumnName(binding.getColumnName())
+                    .setSourceExpr(binding.getSourceExpr())
+                    .setPrimaryBinding(binding.getPrimaryBinding())
+                    .setSortOrder(binding.getSortOrder())
+                    .setUpdatedAt(binding.getUpdatedAt());
+            if (binding.getFilterCondition() != null) {
+                bo.setFilterCondition(binding.getFilterCondition().stream()
+                        .map(f -> new MetricAtomicBO.FilterConditionBO().setField(f.getField()).setOp(f.getOp()).setValue(f.getValue()))
+                        .toList());
+            }
+            return bo;
+        }).toList();
     }
 }

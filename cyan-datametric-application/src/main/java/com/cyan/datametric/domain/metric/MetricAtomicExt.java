@@ -37,28 +37,48 @@ public class MetricAtomicExt {
 
     /**
      * 数据源名称
+     *
+     * @deprecated 物理字段已迁移到 MetricFieldBinding，仅用于兼容旧展示。
      */
+    @Deprecated
     private String dsName;
 
     /**
      * 数据库名称
+     *
+     * @deprecated 物理字段已迁移到 MetricFieldBinding，仅用于兼容旧展示。
      */
+    @Deprecated
     private String dbName;
 
     /**
      * 表名称
+     *
+     * @deprecated 物理字段已迁移到 MetricFieldBinding，仅用于兼容旧展示。
      */
+    @Deprecated
     private String tblName;
 
     /**
      * 字段名称
+     *
+     * @deprecated 物理字段已迁移到 MetricFieldBinding，仅用于兼容旧展示。
      */
+    @Deprecated
     private String colName;
 
     /**
      * 过滤条件
+     *
+     * @deprecated 过滤条件已迁移到 MetricFieldBinding，仅用于兼容旧展示。
      */
+    @Deprecated
     private List<FilterCondition> filterCondition;
+
+    /**
+     * 字段绑定列表
+     */
+    private List<MetricFieldBinding> fieldBindings;
 
     /**
      * 过滤条件项

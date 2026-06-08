@@ -2,12 +2,16 @@ package com.cyan.datametric.application.config;
 
 import com.cyan.arch.common.api.Page;
 import com.cyan.datametric.application.config.bo.DimensionBO;
+import com.cyan.datametric.application.config.bo.DimensionFieldBindingBO;
 import com.cyan.datametric.application.config.cmd.DimensionCmd;
+import com.cyan.datametric.application.config.cmd.DimensionFieldBindingCmd;
 import com.cyan.datametric.application.config.convert.ConfigAppConvert;
 import com.cyan.datametric.domain.config.BuiltinTimeDimension;
 import com.cyan.datametric.domain.config.Dimension;
+import com.cyan.datametric.domain.config.DimensionFieldBinding;
 import com.cyan.datametric.domain.config.query.DimensionPageQuery;
 import com.cyan.datametric.domain.config.repository.DimensionRepository;
+import com.cyan.datametric.domain.config.repository.DimensionFieldBindingRepository;
 import com.cyan.datametric.domain.metric.dimension.category.DimensionCategory;
 import com.cyan.datametric.domain.metric.dimension.category.repository.DimensionCategoryRepository;
 import com.cyan.datametric.infra.util.SnowflakeIdUtil;
@@ -29,6 +33,7 @@ import com.cyan.arch.common.api.BusinessException;
 public class DimensionService {
 
     private final DimensionRepository dimensionRepository;
+    private final DimensionFieldBindingRepository dimensionFieldBindingRepository;
     private final DimensionCategoryRepository dimensionCategoryRepository;
     private final ConfigAppConvert configAppConvert;
 
@@ -173,5 +178,75 @@ public class DimensionService {
         bo.setColumnName(builtin.buildExpr(null));
         bo.setDescription("系统内置时间维度，无需维表");
         return bo;
+    }
+
+    /**
+     * 查询维度字段绑定
+     */
+    public List<DimensionFieldBindingBO> listFieldBindings(String dimId) {
+        return toDimensionFieldBindingBOs(dimensionFieldBindingRepository.findByDimId(dimId));
+    }
+
+    /**
+     * 保存维度字段绑定
+     */
+    public DimensionFieldBindingBO saveFieldBinding(String dimId, DimensionFieldBindingCmd cmd, String operator) {
+        Dimension dimension = dimensionRepository.findById(dimId);
+        Assert.notNull(dimension, new BusinessException("维度不存在"));
+        DimensionFieldBinding binding = configAppConvert.toDimensionFieldBinding(cmd);
+        binding.setDimId(dimId);
+        binding.setUpdateBy(operator);
+        DimensionFieldBinding saved;
+        if (binding.getId() != null && !binding.getId().isBlank()) {
+            saved = binding.update(dimensionFieldBindingRepository);
+        } else {
+            binding.setCreateBy(operator);
+            saved = binding.save(dimensionFieldBindingRepository);
+        }
+        return toDimensionFieldBindingBO(saved);
+    }
+
+    /**
+     * 删除维度字段绑定
+     */
+    public void deleteFieldBinding(String dimId, String bindingId) {
+        DimensionFieldBinding binding = dimensionFieldBindingRepository.findById(bindingId);
+        Assert.notNull(binding, new BusinessException("维度字段绑定不存在"));
+        Assert.isTrue(dimId.equals(binding.getDimId()), new BusinessException("维度字段绑定不属于当前维度"));
+        binding.delete(dimensionFieldBindingRepository);
+    }
+
+    /**
+     * 设置主维度字段绑定
+     */
+    public void setPrimaryFieldBinding(String dimId, String bindingId) {
+        DimensionFieldBinding binding = dimensionFieldBindingRepository.findById(bindingId);
+        Assert.notNull(binding, new BusinessException("维度字段绑定不存在"));
+        Assert.isTrue(dimId.equals(binding.getDimId()), new BusinessException("维度字段绑定不属于当前维度"));
+        dimensionFieldBindingRepository.setPrimary(dimId, bindingId);
+    }
+
+    private List<DimensionFieldBindingBO> toDimensionFieldBindingBOs(List<DimensionFieldBinding> bindings) {
+        if (bindings == null) {
+            return List.of();
+        }
+        return bindings.stream().map(this::toDimensionFieldBindingBO).toList();
+    }
+
+    private DimensionFieldBindingBO toDimensionFieldBindingBO(DimensionFieldBinding binding) {
+        return new DimensionFieldBindingBO()
+                .setId(binding.getId())
+                .setDimId(binding.getDimId())
+                .setTableRole(binding.getTableRole())
+                .setCatalogName(binding.getCatalogName())
+                .setSchemaName(binding.getSchemaName())
+                .setTableName(binding.getTableName())
+                .setColumnName(binding.getColumnName())
+                .setDisplayColumn(binding.getDisplayColumn())
+                .setSourceType(binding.getSourceType())
+                .setSourceExpr(binding.getSourceExpr())
+                .setPrimaryBinding(binding.getPrimaryBinding())
+                .setSortOrder(binding.getSortOrder())
+                .setUpdatedAt(binding.getUpdatedAt());
     }
 }

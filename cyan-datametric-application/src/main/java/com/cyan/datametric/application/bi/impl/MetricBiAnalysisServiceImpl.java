@@ -18,7 +18,6 @@ import com.cyan.datametric.application.bi.MetricBiErrorCode;
 import com.cyan.datametric.application.bi.MetricResolver;
 import com.cyan.datametric.application.bi.MetricSqlBuilder;
 import com.cyan.datametric.application.bi.ResolvedMetric;
-import com.cyan.datametric.application.bi.TableConsistencyChecker;
 import com.cyan.datametric.application.bi.bo.BiDimensionBO;
 import com.cyan.datametric.application.bi.bo.BiMetricBO;
 import com.cyan.datametric.application.bi.bo.ChartDataBO;
@@ -78,7 +77,6 @@ import java.util.Set;
 public class MetricBiAnalysisServiceImpl implements MetricBiAnalysisService {
 
     private final MetricResolver metricResolver;
-    private final TableConsistencyChecker tableConsistencyChecker;
     private final MetricSqlBuilder metricSqlBuilder;
     private final MetricRepository metricRepository;
     private final DimensionRepository dimensionRepository;
@@ -167,9 +165,7 @@ public class MetricBiAnalysisServiceImpl implements MetricBiAnalysisService {
     @Override
     public String previewSql(MetricBiAnalysisCmd cmd) {
         List<ResolvedMetric> resolvedMetrics = metricResolver.resolve(cmd.getMetrics());
-        tableConsistencyChecker.check(resolvedMetrics);
-        String tableName = tableConsistencyChecker.getUnifiedTableName(resolvedMetrics);
-        return metricSqlBuilder.build(cmd, resolvedMetrics, tableName);
+        return metricSqlBuilder.build(cmd, resolvedMetrics, null);
     }
 
     @Override
@@ -553,24 +549,38 @@ public class MetricBiAnalysisServiceImpl implements MetricBiAnalysisService {
         if (metrics == null || metrics.isEmpty()) {
             return true;
         }
-        Set<String> factTables = metrics.stream()
-                .flatMap(m -> m.tableRefs().stream())
-                .collect(java.util.stream.Collectors.toCollection(LinkedHashSet::new));
-        if (factTables.isEmpty()) {
+        List<String> metricCodes = metrics.stream()
+                .map(MetricContext::metricCode)
+                .filter(StringUtils::hasText)
+                .distinct()
+                .toList();
+        List<String> dimCodes = dimensions == null ? List.of() : dimensions.stream()
+                .map(DimensionContext::dimCode)
+                .filter(StringUtils::hasText)
+                .distinct()
+                .toList();
+        return canBuildAssociationPlan(metricCodes, dimCodes);
+    }
+
+    /**
+     * 通过统一 SQL planner 判断一组指标维度是否存在可执行绑定组合。
+     */
+    private boolean canBuildAssociationPlan(List<String> metricCodes, List<String> dimCodes) {
+        if (metricCodes == null || metricCodes.isEmpty()) {
+            return true;
+        }
+        try {
+            List<MetricBiAnalysisCmd.MetricRef> metricRefs = metricCodes.stream()
+                    .map(metricCode -> new MetricBiAnalysisCmd.MetricRef().setMetricCode(metricCode))
+                    .toList();
+            List<ResolvedMetric> metrics = metricResolver.resolve(metricRefs);
+            List<ResolvedDimension> dimensions = dimCodes == null ? List.of() : dimCodes.stream()
+                    .map(dimensionResolver::resolve)
+                    .toList();
+            return metricSqlBuilder.canPlan(metrics, dimensions);
+        } catch (BusinessException e) {
             return false;
         }
-        if (dimensions == null || dimensions.isEmpty()) {
-            return factTables.size() <= 1;
-        }
-        for (MetricContext metric : metrics) {
-            for (DimensionContext dimension : dimensions) {
-                AssociationRelation relation = relationBetweenMetricAndDimension(metric, dimension, relationCache);
-                if (!relation.associated()) {
-                    return false;
-                }
-            }
-        }
-        return true;
     }
 
     private AssociationRelation relationBetweenMetricAndDimension(MetricContext metric,
@@ -585,7 +595,7 @@ public class MetricBiAnalysisServiceImpl implements MetricBiAnalysisService {
             return allMatched
                     ? AssociationRelation.associated("SOURCE_TABLE", dimension.sourceTableRef(), dimension.sourceTableRef(),
                     null, dimension.columnName(), null, "事实表本地维度")
-                    : AssociationRelation.notAssociated();
+                    : fallbackPlannerRelation(metric, dimension);
         }
 
         if (!StringUtils.hasText(dimension.tableRef())) {
@@ -602,13 +612,25 @@ public class MetricBiAnalysisServiceImpl implements MetricBiAnalysisService {
             }
             AssociationRelation relation = queryJoinRelation(factTable, dimension.tableRef(), relationCache);
             if (!relation.associated()) {
-                return AssociationRelation.notAssociated();
+                return fallbackPlannerRelation(metric, dimension);
             }
             if (firstRelation == null) {
                 firstRelation = relation;
             }
         }
-        return firstRelation != null ? firstRelation : AssociationRelation.notAssociated();
+        return firstRelation != null ? firstRelation : fallbackPlannerRelation(metric, dimension);
+    }
+
+    /**
+     * 旧关系推断无法解释多绑定时，回退到统一 planner 的可执行性结论。
+     */
+    private AssociationRelation fallbackPlannerRelation(MetricContext metric, DimensionContext dimension) {
+        if (!canBuildAssociationPlan(List.of(metric.metricCode()), List.of(dimension.dimCode()))) {
+            return AssociationRelation.notAssociated();
+        }
+        return AssociationRelation.associated("PLANNED", primaryTableRef(metric),
+                StringUtils.hasText(dimension.tableRef()) ? dimension.tableRef() : dimension.sourceTableRef(),
+                null, dimension.columnName(), null, "存在可执行的字段绑定规划");
     }
 
     /**
@@ -733,11 +755,12 @@ public class MetricBiAnalysisServiceImpl implements MetricBiAnalysisService {
         }
         switch (metric.getMetricType()) {
             case ATOMIC -> {
-                if (metric.getAtomicExt() != null
-                        && StringUtils.hasText(metric.getAtomicExt().getDbName())
-                        && StringUtils.hasText(metric.getAtomicExt().getTblName())) {
-                    tableRefs.add(normalizeTableRef(metric.getAtomicExt().getDbName()
-                            + "." + metric.getAtomicExt().getTblName()));
+                if (metric.getAtomicExt() != null && metric.getAtomicExt().getFieldBindings() != null) {
+                    for (com.cyan.datametric.domain.metric.MetricFieldBinding binding : metric.getAtomicExt().getFieldBindings()) {
+                        if (StringUtils.hasText(binding.getSchemaName()) && StringUtils.hasText(binding.getTableName())) {
+                            tableRefs.add(binding.tableRef(defaultCatalog));
+                        }
+                    }
                 }
             }
             case DERIVED -> {

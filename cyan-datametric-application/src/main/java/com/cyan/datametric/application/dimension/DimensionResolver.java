@@ -3,11 +3,15 @@ package com.cyan.datametric.application.dimension;
 import com.cyan.arch.common.api.BusinessException;
 import com.cyan.datametric.domain.config.BuiltinTimeDimension;
 import com.cyan.datametric.domain.config.Dimension;
+import com.cyan.datametric.domain.config.DimensionFieldBinding;
+import com.cyan.datametric.domain.config.repository.DimensionFieldBindingRepository;
 import com.cyan.datametric.domain.config.repository.DimensionRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
+
+import java.util.List;
 
 /**
  * 维度解析器
@@ -20,6 +24,7 @@ import org.springframework.util.StringUtils;
 public class DimensionResolver {
 
     private final DimensionRepository dimensionRepository;
+    private final DimensionFieldBindingRepository dimensionFieldBindingRepository;
 
     @Value("${cyan.datametric.default-catalog:iceberg}")
     private String defaultCatalog;
@@ -56,15 +61,24 @@ public class DimensionResolver {
             throw new BusinessException("维度不存在");
         }
         String kind = normalizeKind(dimension.getDimensionKind());
-        String expression = resolveExpression(dimension);
-        String tableRef = resolveTableRef(dimension.getSchemaName(), dimension.getTableName());
-        String sourceTableRef = StringUtils.hasText(dimension.getSourceTable())
-                ? normalizeTableRef(dimension.getSourceTable())
-                : null;
-        boolean requiresJoin = ("NORMAL".equals(kind) || "HIERARCHY".equals(kind)) && StringUtils.hasText(tableRef);
-        String displayExpr = StringUtils.hasText(dimension.getDisplayColumn())
-                ? quoteIdentifier(dimension.getDisplayColumn())
-                : expression;
+        List<DimensionFieldBinding> bindings = dimension.getFieldBindings();
+        if ((bindings == null || bindings.isEmpty()) && StringUtils.hasText(dimension.getId())) {
+            bindings = dimensionFieldBindingRepository.findByDimId(dimension.getId());
+        }
+        DimensionFieldBinding primary = primaryBinding(bindings);
+        String expression = primary != null ? resolveExpression(primary) : resolveExpression(dimension);
+        String tableRef = primary != null && !"FACT".equals(primary.getTableRole())
+                ? primary.tableRef(defaultCatalog)
+                : resolveTableRef(dimension.getSchemaName(), dimension.getTableName());
+        String sourceTableRef = primary != null && "FACT".equals(primary.getTableRole())
+                ? primary.tableRef(defaultCatalog)
+                : (StringUtils.hasText(dimension.getSourceTable()) ? normalizeTableRef(dimension.getSourceTable()) : null);
+        boolean requiresJoin = primary != null
+                ? "DIMENSION".equals(primary.getTableRole())
+                : ("NORMAL".equals(kind) || "HIERARCHY".equals(kind)) && StringUtils.hasText(tableRef);
+        String displayExpr = primary != null && StringUtils.hasText(primary.getDisplayColumn())
+                ? quoteIdentifier(primary.getDisplayColumn())
+                : (StringUtils.hasText(dimension.getDisplayColumn()) ? quoteIdentifier(dimension.getDisplayColumn()) : expression);
         return new ResolvedDimension()
                 .setDimCode(dimension.getDimCode())
                 .setDimName(dimension.getDimName())
@@ -77,7 +91,8 @@ public class DimensionResolver {
                 .setRequiresJoin(requiresJoin)
                 .setColumnName(dimension.getColumnName())
                 .setDisplayColumn(dimension.getDisplayColumn())
-                .setBuiltin(false);
+                .setBuiltin(false)
+                .setFieldBindings(bindings);
     }
 
     /**
@@ -112,7 +127,53 @@ public class DimensionResolver {
                 .setGroupExpr(builtin.buildExpr(null))
                 .setFilterExpr("`dt`")
                 .setColumnName("dt")
-                .setBuiltin(true);
+                .setBuiltin(true)
+                .setFieldBindings(List.of(new DimensionFieldBinding()
+                        .setId(builtin.name())
+                        .setDimId(builtin.name())
+                        .setTableRole("FACT")
+                        .setColumnName("dt")
+                        .setSourceType("EXPRESSION")
+                        .setSourceExpr(builtin.buildExpr(null))
+                        .setPrimaryBinding(true)
+                        .setSortOrder(0)));
+    }
+
+    /**
+     * 选择主绑定
+     */
+    private DimensionFieldBinding primaryBinding(List<DimensionFieldBinding> bindings) {
+        if (bindings == null || bindings.isEmpty()) {
+            return null;
+        }
+        return bindings.stream()
+                .filter(binding -> Boolean.TRUE.equals(binding.getPrimaryBinding()))
+                .findFirst()
+                .orElse(bindings.getFirst());
+    }
+
+    /**
+     * 解析维度绑定表达式
+     */
+    private String resolveExpression(DimensionFieldBinding binding) {
+        String sourceType = StringUtils.hasText(binding.getSourceType()) ? binding.getSourceType() : "COLUMN";
+        return switch (sourceType) {
+            case "JSON_PATH" -> "JSON_VALUE(`properties`, '" + escapeSql(StringUtils.hasText(binding.getSourceExpr())
+                    ? binding.getSourceExpr()
+                    : "$.properties." + binding.getColumnName()) + "')";
+            case "EXPRESSION" -> {
+                if (!StringUtils.hasText(binding.getSourceExpr())) {
+                    throw new BusinessException("表达式维度绑定未配置SQL表达式: " + binding.getId());
+                }
+                yield binding.getSourceExpr();
+            }
+            default -> {
+                if (!StringUtils.hasText(binding.getColumnName())) {
+                    throw new BusinessException("字段维度绑定未配置物理字段: " + binding.getId());
+                }
+                yield quoteIdentifier(binding.getColumnName());
+            }
+        };
     }
 
     /**

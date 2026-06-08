@@ -5,9 +5,11 @@ import com.cyan.datametric.application.config.bo.DimensionBO;
 import com.cyan.datametric.application.config.bo.ModifierBO;
 import com.cyan.datametric.application.config.bo.TimePeriodBO;
 import com.cyan.datametric.application.config.cmd.DimensionCmd;
+import com.cyan.datametric.application.config.cmd.DimensionFieldBindingCmd;
 import com.cyan.datametric.application.config.cmd.ModifierCmd;
 import com.cyan.datametric.application.config.cmd.TimePeriodCmd;
 import com.cyan.datametric.domain.config.Dimension;
+import com.cyan.datametric.domain.config.DimensionFieldBinding;
 import com.cyan.datametric.domain.config.Modifier;
 import com.cyan.datametric.domain.config.TimePeriod;
 import com.cyan.datametric.enums.PeriodType;
@@ -54,7 +56,27 @@ public interface ConfigAppConvert {
         d.setDescription(cmd.getDescription());
         d.setCreateBy(cmd.getCreateBy());
         d.setUpdateBy(cmd.getUpdateBy());
+        if (cmd.getFieldBindings() != null) {
+            d.setFieldBindings(cmd.getFieldBindings().stream().map(this::toDimensionFieldBinding).toList());
+        }
         return d;
+    }
+
+    default DimensionFieldBinding toDimensionFieldBinding(DimensionFieldBindingCmd cmd) {
+        if (cmd == null) return null;
+        DimensionFieldBinding binding = new DimensionFieldBinding();
+        binding.setId(cmd.getId());
+        binding.setTableRole(cmd.getTableRole());
+        binding.setCatalogName(cmd.getCatalogName());
+        binding.setSchemaName(cmd.getSchemaName());
+        binding.setTableName(cmd.getTableName());
+        binding.setColumnName(cmd.getColumnName());
+        binding.setDisplayColumn(cmd.getDisplayColumn());
+        binding.setSourceType(cmd.getSourceType());
+        binding.setSourceExpr(cmd.getSourceExpr());
+        binding.setPrimaryBinding(cmd.getPrimaryBinding());
+        binding.setSortOrder(cmd.getSortOrder());
+        return binding;
     }
 
     default Modifier toModifier(ModifierCmd cmd) {

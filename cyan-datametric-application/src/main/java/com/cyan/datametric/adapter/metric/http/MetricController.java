@@ -66,6 +66,45 @@ public class MetricController {
         return Response.success(metricAdapterConvert.toMetricDTO(bo));
     }
 
+    @GetMapping("/{id}/field-bindings")
+    public Response<List<MetricFieldBindingDTO>> listFieldBindings(@PathVariable("id") String id) {
+        return Response.success(metricService.listFieldBindings(id).stream()
+                .map(metricAdapterConvert::toMetricFieldBindingDTO)
+                .toList());
+    }
+
+    @PostMapping("/{id}/field-bindings")
+    public Response<MetricFieldBindingDTO> saveFieldBinding(@PathVariable("id") String id,
+                                                            @RequestBody MetricFieldBindingCmd cmd) {
+        String operator = UserContextHolder.getCurrentEmployee().getPassport();
+        return Response.success(metricAdapterConvert.toMetricFieldBindingDTO(
+                metricService.saveFieldBinding(id, cmd, operator)));
+    }
+
+    @PutMapping("/{id}/field-bindings/{bindingId}")
+    public Response<MetricFieldBindingDTO> updateFieldBinding(@PathVariable("id") String id,
+                                                              @PathVariable("bindingId") String bindingId,
+                                                              @RequestBody MetricFieldBindingCmd cmd) {
+        String operator = UserContextHolder.getCurrentEmployee().getPassport();
+        cmd.setId(bindingId);
+        return Response.success(metricAdapterConvert.toMetricFieldBindingDTO(
+                metricService.saveFieldBinding(id, cmd, operator)));
+    }
+
+    @DeleteMapping("/{id}/field-bindings/{bindingId}")
+    public Response<Void> deleteFieldBinding(@PathVariable("id") String id,
+                                             @PathVariable("bindingId") String bindingId) {
+        metricService.deleteFieldBinding(id, bindingId);
+        return Response.success();
+    }
+
+    @PutMapping("/{id}/field-bindings/{bindingId}/primary")
+    public Response<Void> setPrimaryFieldBinding(@PathVariable("id") String id,
+                                                 @PathVariable("bindingId") String bindingId) {
+        metricService.setPrimaryFieldBinding(id, bindingId);
+        return Response.success();
+    }
+
     @PostMapping("/derived")
     public Response<MetricDTO> createDerived(@RequestBody @Valid DerivedMetricCmd cmd) {
         cmd.setCreateBy(UserContextHolder.getCurrentEmployee().getPassport());

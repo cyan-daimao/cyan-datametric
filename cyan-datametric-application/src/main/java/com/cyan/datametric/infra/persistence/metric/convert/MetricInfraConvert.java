@@ -76,13 +76,6 @@ public interface MetricInfraConvert {
         ext.setId(atomic.getId() == null ? null : String.valueOf(atomic.getId()));
         ext.setMetricId(atomic.getMetricId() == null ? null : String.valueOf(atomic.getMetricId()));
         ext.setStatFunc(atomic.getStatFunc());
-        ext.setDsName(atomic.getDsName());
-        ext.setDbName(atomic.getDbName());
-        ext.setTblName(atomic.getTblName());
-        ext.setColName(atomic.getColName());
-        if (atomic.getFilterCondition() != null && !atomic.getFilterCondition().isEmpty()) {
-            ext.setFilterCondition(parseList(atomic.getFilterCondition(), MetricAtomicExt.FilterCondition.class));
-        }
         return ext;
     }
 
@@ -92,13 +85,6 @@ public interface MetricInfraConvert {
         d.setId(atomic.getId() == null ? null : Long.parseLong(atomic.getId()));
         d.setMetricId(atomic.getMetricId() == null ? null : Long.parseLong(atomic.getMetricId()));
         d.setStatFunc(atomic.getStatFunc());
-        d.setDsName(atomic.getDsName());
-        d.setDbName(atomic.getDbName());
-        d.setTblName(atomic.getTblName());
-        d.setColName(atomic.getColName());
-        if (atomic.getFilterCondition() != null) {
-            d.setFilterCondition(JSON.toJSONString(atomic.getFilterCondition()));
-        }
         return d;
     }
 

@@ -129,6 +129,11 @@ public class Dimension {
     private String description;
 
     /**
+     * 字段绑定列表
+     */
+    private List<DimensionFieldBinding> fieldBindings;
+
+    /**
      * 创建人
      */
     private String createBy;
@@ -155,26 +160,13 @@ public class Dimension {
             this.dimensionKind = "NORMAL";
         }
         switch (this.dimensionKind) {
-            case "NORMAL" -> {
-                Assert.notBlank(this.tableName, new BusinessException("普通维度必须配置关联维表"));
-                Assert.notBlank(this.columnName, new BusinessException("普通维度必须配置关联字段"));
-            }
-            case "DEGENERATE" -> {
-                Assert.notBlank(this.sourceTable, new BusinessException("退化维度必须配置来源事实表"));
-                Assert.isTrue(hasColumnOrExpression(), new BusinessException("退化维度必须配置物理字段或来源表达式"));
+            case "NORMAL", "DEGENERATE" -> {
             }
             case "HIERARCHY" -> {
-                Assert.notBlank(this.tableName, new BusinessException("层级维度必须配置关联维表"));
-                Assert.notBlank(this.columnName, new BusinessException("层级维度必须配置关联字段"));
                 Assert.notBlank(this.hierarchyCode, new BusinessException("层级维度必须配置层级编码"));
                 Assert.notNull(this.hierarchyLevel, new BusinessException("层级维度必须配置层级级别"));
             }
             case "DERIVED" -> {
-                Assert.isTrue("EXPRESSION".equals(this.sourceType), new BusinessException("派生维度来源类型必须为 EXPRESSION"));
-                Assert.notBlank(this.sourceExpr, new BusinessException("派生维度必须配置来源表达式"));
-                Assert.isTrue((this.sourceTable != null && !this.sourceTable.isBlank())
-                                || (this.tableName != null && !this.tableName.isBlank()),
-                        new BusinessException("派生维度必须配置来源事实表或关联维表"));
             }
             default -> throw new BusinessException("不支持的维度实现类型: " + this.dimensionKind);
         }

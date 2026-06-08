@@ -4,10 +4,12 @@ import com.cyan.arch.base.mapstruct.MapstructConvert;
 import com.cyan.datametric.application.metric.bo.MetricBO;
 import com.cyan.datametric.application.metric.cmd.AtomicMetricCmd;
 import com.cyan.datametric.application.metric.cmd.DerivedMetricCmd;
+import com.cyan.datametric.application.metric.cmd.MetricFieldBindingCmd;
 import com.cyan.datametric.domain.metric.Metric;
 import com.cyan.datametric.domain.metric.MetricAtomicExt;
 import com.cyan.datametric.domain.metric.MetricCompositeExt;
 import com.cyan.datametric.domain.metric.MetricDerivedExt;
+import com.cyan.datametric.domain.metric.MetricFieldBinding;
 import com.cyan.datametric.enums.StatFunc;
 import org.mapstruct.Mapper;
 
@@ -37,7 +39,31 @@ public interface MetricAppConvert {
                     .map(f -> new MetricAtomicExt.FilterCondition().setField(f.getField()).setOp(f.getOp()).setValue(f.getValue()))
                     .collect(Collectors.toList()));
         }
+        if (cmd.getFieldBindings() != null) {
+            ext.setFieldBindings(cmd.getFieldBindings().stream()
+                    .map(this::toMetricFieldBinding)
+                    .collect(Collectors.toList()));
+        }
         return ext;
+    }
+
+    default MetricFieldBinding toMetricFieldBinding(MetricFieldBindingCmd cmd) {
+        if (cmd == null) return null;
+        MetricFieldBinding binding = new MetricFieldBinding();
+        binding.setId(cmd.getId());
+        binding.setCatalogName(cmd.getCatalogName());
+        binding.setSchemaName(cmd.getSchemaName());
+        binding.setTableName(cmd.getTableName());
+        binding.setColumnName(cmd.getColumnName());
+        binding.setSourceExpr(cmd.getSourceExpr());
+        binding.setPrimaryBinding(cmd.getPrimaryBinding());
+        binding.setSortOrder(cmd.getSortOrder());
+        if (cmd.getFilterCondition() != null) {
+            binding.setFilterCondition(cmd.getFilterCondition().stream()
+                    .map(f -> new MetricAtomicExt.FilterCondition().setField(f.getField()).setOp(f.getOp()).setValue(f.getValue()))
+                    .collect(Collectors.toList()));
+        }
+        return binding;
     }
 
     default MetricDerivedExt toDerivedExt(DerivedMetricCmd cmd) {

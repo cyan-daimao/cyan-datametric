@@ -45,36 +45,6 @@ public class MetricAtomicDO {
     private StatFunc statFunc;
 
     /**
-     * 数据源名称
-     */
-    @TableField("ds_name")
-    private String dsName;
-
-    /**
-     * 数据库名称
-     */
-    @TableField("db_name")
-    private String dbName;
-
-    /**
-     * 表名称
-     */
-    @TableField("tbl_name")
-    private String tblName;
-
-    /**
-     * 字段名称
-     */
-    @TableField("col_name")
-    private String colName;
-
-    /**
-     * 过滤条件JSON
-     */
-    @TableField("filter_condition")
-    private String filterCondition;
-
-    /**
      * 逻辑删除时间
      */
     @TableField("deleted_at")

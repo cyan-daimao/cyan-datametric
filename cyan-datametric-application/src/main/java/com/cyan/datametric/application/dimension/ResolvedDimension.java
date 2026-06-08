@@ -1,7 +1,10 @@
 package com.cyan.datametric.application.dimension;
 
+import com.cyan.datametric.domain.config.DimensionFieldBinding;
 import lombok.Data;
 import lombok.experimental.Accessors;
+
+import java.util.List;
 
 /**
  * 已解析维度 SQL 信息
@@ -72,4 +75,9 @@ public class ResolvedDimension {
      * 是否系统内置维度
      */
     private boolean builtin;
+
+    /**
+     * 字段绑定候选
+     */
+    private List<DimensionFieldBinding> fieldBindings;
 }

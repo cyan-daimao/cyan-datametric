@@ -9,6 +9,7 @@ import com.cyan.datametric.domain.config.repository.ModifierRepository;
 import com.cyan.datametric.domain.metric.Metric;
 import com.cyan.datametric.domain.metric.MetricAtomicExt;
 import com.cyan.datametric.domain.metric.MetricDerivedExt;
+import com.cyan.datametric.domain.metric.MetricFieldBinding;
 import com.cyan.datametric.enums.MetricType;
 import com.cyan.datametric.infra.gateway.MetadataLineageGateway;
 import org.springframework.stereotype.Service;
@@ -102,9 +103,13 @@ public class MetricFieldLineageSyncService {
         if (ext == null) {
             return;
         }
-        addField(ext.getDsName(), ext.getDbName(), ext.getTblName(), ext.getColName(), targetMetric.getId(), nodes, edges);
-        for (MetricAtomicExt.FilterCondition filter : Optional.ofNullable(ext.getFilterCondition()).orElse(List.of())) {
-            addField(ext.getDsName(), ext.getDbName(), ext.getTblName(), filter.getField(), targetMetric.getId(), nodes, edges);
+        for (MetricFieldBinding binding : Optional.ofNullable(ext.getFieldBindings()).orElse(List.of())) {
+            addField(binding.getCatalogName(), binding.getSchemaName(), binding.getTableName(), binding.getColumnName(),
+                    targetMetric.getId(), nodes, edges);
+            for (MetricAtomicExt.FilterCondition filter : Optional.ofNullable(binding.getFilterCondition()).orElse(List.of())) {
+                addField(binding.getCatalogName(), binding.getSchemaName(), binding.getTableName(), filter.getField(),
+                        targetMetric.getId(), nodes, edges);
+            }
         }
     }
 
@@ -114,15 +119,19 @@ public class MetricFieldLineageSyncService {
     private void collectDerivedExtraFields(Metric metric, Metric atomicMetric, Map<String, MetadataLineageNodeDTO> nodes, List<MetadataLineageEdgeDTO> edges) {
         MetricDerivedExt ext = metric.getDerivedExt();
         MetricAtomicExt atomicExt = atomicMetric.getAtomicExt();
-        if (ext == null || atomicExt == null) {
+        if (ext == null || atomicExt == null || atomicExt.getFieldBindings() == null || atomicExt.getFieldBindings().isEmpty()) {
             return;
         }
+        MetricFieldBinding primary = atomicExt.getFieldBindings().stream()
+                .filter(binding -> Boolean.TRUE.equals(binding.getPrimaryBinding()))
+                .findFirst()
+                .orElse(atomicExt.getFieldBindings().getFirst());
         for (MetricDerivedExt.GroupByField groupByField : Optional.ofNullable(ext.getGroupByFields()).orElse(List.of())) {
-            addField(atomicExt.getDsName(), atomicExt.getDbName(), atomicExt.getTblName(), groupByField.getCol(), metric.getId(), nodes, edges);
+            addField(primary.getCatalogName(), primary.getSchemaName(), primary.getTableName(), groupByField.getCol(), metric.getId(), nodes, edges);
         }
         List<Modifier> modifiers = modifierRepository.findByIds(Optional.ofNullable(ext.getModifierIds()).orElse(List.of()));
         for (Modifier modifier : Optional.ofNullable(modifiers).orElse(List.of())) {
-            addField(atomicExt.getDsName(), atomicExt.getDbName(), atomicExt.getTblName(), modifier.getFieldName(), metric.getId(), nodes, edges);
+            addField(primary.getCatalogName(), primary.getSchemaName(), primary.getTableName(), modifier.getFieldName(), metric.getId(), nodes, edges);
         }
     }
 

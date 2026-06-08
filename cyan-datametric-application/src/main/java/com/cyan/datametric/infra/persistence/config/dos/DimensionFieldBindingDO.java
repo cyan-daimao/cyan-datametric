@@ -13,7 +13,7 @@ import lombok.experimental.Accessors;
 import java.time.LocalDateTime;
 
 /**
- * 公共维度表
+ * 维度字段绑定表
  *
  * @author cy.Y
  * @since 1.0.0
@@ -22,8 +22,8 @@ import java.time.LocalDateTime;
 @NoArgsConstructor
 @Data
 @Accessors(chain = true)
-@TableName("metric_dimension")
-public class MetricDimensionDO {
+@TableName("metric_dimension_binding")
+public class DimensionFieldBindingDO {
 
     /**
      * 主键
@@ -32,82 +32,70 @@ public class MetricDimensionDO {
     private Long id;
 
     /**
-     * 维度编码
+     * 维度ID
      */
-    @TableField("dim_code")
-    private String dimCode;
+    @TableField("dim_id")
+    private Long dimId;
 
     /**
-     * 维度名称
+     * 表角色
      */
-    @TableField("dim_name")
-    private String dimName;
+    @TableField("table_role")
+    private String tableRole;
 
     /**
-     * 维度类型
+     * catalog 名称
      */
-    @TableField("dim_type")
-    private String dimType;
+    @TableField("catalog_name")
+    private String catalogName;
 
     /**
-     * 维度实现类型
+     * schema 名称
      */
-    @TableField("dimension_kind")
-    private String dimensionKind;
+    @TableField("schema_name")
+    private String schemaName;
 
     /**
-     * 数据类型
+     * 表名称
      */
-    @TableField("data_type")
-    private String dataType;
+    @TableField("table_name")
+    private String tableName;
 
     /**
-     * 维度可选值
+     * 字段名称
      */
-    @TableField("dim_values")
-    private String dimValues;
+    @TableField("column_name")
+    private String columnName;
 
     /**
-     * 维度分类ID
+     * 展示字段
      */
-    @TableField("category_id")
-    private Long categoryId;
+    @TableField("display_column")
+    private String displayColumn;
 
     /**
-     * 层级编码
+     * 来源类型
      */
-    @TableField("hierarchy_code")
-    private String hierarchyCode;
+    @TableField("source_type")
+    private String sourceType;
 
     /**
-     * 层级名称
+     * 来源表达式
      */
-    @TableField("hierarchy_name")
-    private String hierarchyName;
+    @TableField("source_expr")
+    private String sourceExpr;
 
     /**
-     * 父级维度编码
+     * 是否主绑定
      */
-    @TableField("parent_dim_code")
-    private String parentDimCode;
-
-    /**
-     * 层级级别
-     */
-    @TableField("hierarchy_level")
-    private Integer hierarchyLevel;
+    @TableField("is_primary")
+    private Boolean primaryBinding;
 
     /**
      * 排序号
      */
     @TableField("sort_order")
     private Integer sortOrder;
-
-    /**
-     * 描述
-     */
-    @TableField("description")
-    private String description;
 
     /**
      * 创建人
@@ -134,7 +122,7 @@ public class MetricDimensionDO {
     private LocalDateTime updatedAt;
 
     /**
-     * 逻辑删除
+     * 删除时间
      */
     @TableField("deleted_at")
     @TableLogic(value = "null", delval = "now()")

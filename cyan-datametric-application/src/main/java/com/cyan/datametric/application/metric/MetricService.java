@@ -115,4 +115,24 @@ public interface MetricService {
      * 回退到指定版本
      */
     MetricBO rollback(String metricId, Integer version);
+
+    /**
+     * 查询指标字段绑定
+     */
+    List<MetricFieldBindingBO> listFieldBindings(String metricId);
+
+    /**
+     * 保存指标字段绑定
+     */
+    MetricFieldBindingBO saveFieldBinding(String metricId, MetricFieldBindingCmd cmd, String operator);
+
+    /**
+     * 删除指标字段绑定
+     */
+    void deleteFieldBinding(String metricId, String bindingId);
+
+    /**
+     * 设置主字段绑定
+     */
+    void setPrimaryFieldBinding(String metricId, String bindingId);
 }
