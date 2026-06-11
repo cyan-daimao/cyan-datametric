@@ -25,6 +25,11 @@ public class SqlPreviewCmd {
 
     @Data
     public static class DefinitionBody {
+        /**
+         * 指标ID，编辑已有指标时用于读取字段绑定
+         */
+        private String metricId;
+
         private String statFunc;
         private String dsName;
         private String dbName;

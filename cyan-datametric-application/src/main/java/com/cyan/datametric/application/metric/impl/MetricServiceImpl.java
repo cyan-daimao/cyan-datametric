@@ -63,6 +63,9 @@ public class MetricServiceImpl implements MetricService {
     @Value("${datametric.default-datasource:cyan_iceberg}")
     private String defaultDatasource;
 
+    @Value("${cyan.datametric.default-catalog:iceberg}")
+    private String defaultCatalog;
+
 
     @Override
     public Page<MetricBO> page(MetricPageQuery query, String currentUser) {
@@ -586,22 +589,130 @@ public class MetricServiceImpl implements MetricService {
     }
 
     private String buildAggExpression(String func, String col) {
+        Assert.notBlank(func, new BusinessException("统计函数不能为空"));
+        Assert.notBlank(col, new BusinessException("指标字段或表达式不能为空"));
         if ("COUNT_DISTINCT".equals(func)) {
             return "COUNT(DISTINCT " + col + ")";
         }
         return func + "(" + col + ")";
     }
 
+    private MetricFieldBinding resolvePreviewBinding(SqlPreviewCmd.DefinitionBody body) {
+        if (body == null || !hasText(body.getMetricId())) {
+            return null;
+        }
+        return primaryBinding(metricFieldBindingRepository.findByMetricId(body.getMetricId()));
+    }
+
+    private MetricFieldBinding resolvePreviewBinding(String metricId, MetricAtomicExt ext) {
+        MetricFieldBinding binding = hasText(metricId)
+                ? primaryBinding(metricFieldBindingRepository.findByMetricId(metricId))
+                : null;
+        if (binding != null) {
+            return binding;
+        }
+        return primaryBinding(ext == null ? null : ext.getFieldBindings());
+    }
+
+    private MetricFieldBinding primaryBinding(List<MetricFieldBinding> bindings) {
+        if (bindings == null || bindings.isEmpty()) {
+            return null;
+        }
+        return bindings.stream()
+                .filter(binding -> Boolean.TRUE.equals(binding.getPrimaryBinding()))
+                .findFirst()
+                .orElse(bindings.getFirst());
+    }
+
+    private String resolveMetricExpression(MetricFieldBinding binding, String fallbackColumn) {
+        if (binding != null && hasText(binding.getSourceExpr())) {
+            return binding.getSourceExpr();
+        }
+        String column = binding != null && hasText(binding.getColumnName()) ? binding.getColumnName() : fallbackColumn;
+        Assert.notBlank(column, new BusinessException("指标未配置物理字段绑定，请先在详情中配置字段绑定"));
+        return quoteIdentifier(column);
+    }
+
+    private String resolveMetricAlias(MetricFieldBinding binding, String fallbackColumn) {
+        if (binding != null && hasText(binding.getColumnName())) {
+            return binding.getColumnName();
+        }
+        if (hasText(fallbackColumn)) {
+            return fallbackColumn;
+        }
+        return "metric_value";
+    }
+
+    private String resolveMetricTable(MetricFieldBinding binding, SqlPreviewCmd.DefinitionBody body) {
+        if (binding != null) {
+            return binding.tableRef(defaultCatalog);
+        }
+        Assert.notBlank(body.getDbName(), new BusinessException("指标未配置物理字段绑定，请先在详情中配置字段绑定"));
+        Assert.notBlank(body.getTblName(), new BusinessException("指标未配置物理字段绑定，请先在详情中配置字段绑定"));
+        return body.getDbName() + "." + body.getTblName();
+    }
+
+    private String resolveMetricTable(MetricFieldBinding binding, MetricAtomicExt ext) {
+        if (binding != null) {
+            return binding.tableRef(defaultCatalog);
+        }
+        Assert.notBlank(ext.getDbName(), new BusinessException("原子指标未配置物理字段绑定"));
+        Assert.notBlank(ext.getTblName(), new BusinessException("原子指标未配置物理字段绑定"));
+        return ext.getDbName() + "." + ext.getTblName();
+    }
+
+    private String buildCondition(String field, String op, String value) {
+        Assert.notBlank(field, new BusinessException("过滤字段不能为空"));
+        Assert.notBlank(op, new BusinessException("过滤运算符不能为空"));
+        String operator = op.trim();
+        if ("IN".equalsIgnoreCase(operator)) {
+            List<String> values = Arrays.stream(String.valueOf(value).split(","))
+                    .map(String::trim)
+                    .filter(this::hasText)
+                    .map(this::quoteLiteral)
+                    .toList();
+            Assert.isTrue(!values.isEmpty(), new BusinessException("过滤值不能为空"));
+            return quoteIdentifier(field) + " IN (" + String.join(",", values) + ")";
+        }
+        Assert.notBlank(value, new BusinessException("过滤值不能为空"));
+        return quoteIdentifier(field) + " " + operator + " " + quoteLiteral(value);
+    }
+
+    private String quoteIdentifier(String identifier) {
+        if (!hasText(identifier)) {
+            return identifier;
+        }
+        if (identifier.contains("(") || identifier.contains(" ") || identifier.contains(".")) {
+            return identifier;
+        }
+        return "`" + identifier.replace("`", "``") + "`";
+    }
+
+    private String quoteLiteral(String value) {
+        return "'" + String.valueOf(value).replace("'", "''") + "'";
+    }
+
+    private boolean hasText(String value) {
+        return value != null && !value.isBlank();
+    }
+
     private String buildAtomicSql(SqlPreviewCmd.DefinitionBody body) {
         String func = body.getStatFunc();
-        String col = body.getColName();
-        String table = body.getDbName() + "." + body.getTblName();
+        MetricFieldBinding binding = resolvePreviewBinding(body);
+        String col = resolveMetricExpression(binding, body.getColName());
+        String alias = quoteIdentifier(resolveMetricAlias(binding, body.getColName()));
+        String table = resolveMetricTable(binding, body);
         StringBuilder sql = new StringBuilder();
-        sql.append("SELECT ").append(buildAggExpression(func, col)).append(" as ").append(col).append(" FROM ").append(table);
+        sql.append("SELECT ").append(buildAggExpression(func, col)).append(" as ").append(alias).append(" FROM ").append(table);
         List<String> conditions = new ArrayList<>();
+        if (binding != null && binding.getFilterCondition() != null) {
+            for (MetricAtomicExt.FilterCondition f : binding.getFilterCondition()) {
+                conditions.add(buildCondition(f.getField(), f.getOp(), f.getValue()));
+            }
+        }
         if (body.getFilterCondition() != null) {
             for (AtomicMetricCmd.FilterConditionCmd f : body.getFilterCondition()) {
-                conditions.add(f.getField() + " " + f.getOp() + " '" + f.getValue() + "'");
+                conditions.add(buildCondition(f.getField(), f.getOp(), f.getValue()));
             }
         }
         if (!conditions.isEmpty()) {
@@ -615,9 +726,11 @@ public class MetricServiceImpl implements MetricService {
         Assert.notNull(atomic, new BusinessException("原子指标不存在"));
         Assert.notNull(atomic.getAtomicExt(), new BusinessException("原子指标扩展信息不存在"));
         MetricAtomicExt ext = atomic.getAtomicExt();
+        MetricFieldBinding binding = resolvePreviewBinding(body.getAtomicMetricId(), ext);
         String func = ext.getStatFunc().getCode();
-        String col = ext.getColName();
-        String table = ext.getDbName() + "." + ext.getTblName();
+        String col = resolveMetricExpression(binding, ext.getColName());
+        String alias = resolveMetricAlias(binding, ext.getColName());
+        String table = resolveMetricTable(binding, ext);
         StringBuilder sql = new StringBuilder();
 
         List<String> selectCols = new ArrayList<>();
@@ -626,29 +739,35 @@ public class MetricServiceImpl implements MetricService {
                 selectCols.add(g.getCol());
             }
         }
-        selectCols.add(buildAggExpression(func, col) + " as " + col);
+        selectCols.add(buildAggExpression(func, col) + " as " + quoteIdentifier(alias));
         sql.append("SELECT ").append(String.join(", ", selectCols)).append(" FROM ").append(table);
 
         List<String> conditions = new ArrayList<>();
-        if (ext.getFilterCondition() != null) {
+        if (binding != null && binding.getFilterCondition() != null) {
+            for (MetricAtomicExt.FilterCondition f : binding.getFilterCondition()) {
+                conditions.add(buildCondition(f.getField(), f.getOp(), f.getValue()));
+            }
+        }
+        if (binding == null && ext.getFilterCondition() != null) {
             for (MetricAtomicExt.FilterCondition f : ext.getFilterCondition()) {
-                conditions.add(f.getField() + " " + f.getOp() + " '" + f.getValue() + "'");
+                conditions.add(buildCondition(f.getField(), f.getOp(), f.getValue()));
             }
         }
         if (body.getModifierIds() != null && !body.getModifierIds().isEmpty()) {
             List<Modifier> modifiers = modifierRepository.findByIds(body.getModifierIds());
             for (Modifier m : modifiers) {
                 if (m.getFieldValues() != null && !m.getFieldValues().isEmpty()) {
-                    String values = m.getFieldValues().stream().map(v -> "'" + v + "'")
+                    String values = m.getFieldValues().stream()
+                            .map(this::quoteLiteral)
                             .collect(Collectors.joining(","));
-                    conditions.add(m.getFieldName() + " " + m.getOperator() + " (" + values + ")");
+                    conditions.add(quoteIdentifier(m.getFieldName()) + " " + m.getOperator() + " (" + values + ")");
                 }
             }
         }
         if (body.getTimePeriodId() != null) {
             TimePeriod period = timePeriodRepository.findById(body.getTimePeriodId());
             if (period != null && period.getPeriodType() == PeriodType.RELATIVE) {
-                conditions.add(ext.getColName() + " >= date_sub(current_date, " + Math.abs(period.getRelativeValue()) + ")");
+                conditions.add(col + " >= date_sub(current_date, " + Math.abs(period.getRelativeValue()) + ")");
             }
         }
         if (!conditions.isEmpty()) {
